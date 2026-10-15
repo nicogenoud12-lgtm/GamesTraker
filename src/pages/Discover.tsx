@@ -107,17 +107,41 @@ function ForYou({ mode, keys }: { mode: Mode; keys: Keys }) {
     setGames(null);
     setError(null);
     setNotes({});
+    const byGenre = () => recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal);
     const run = personal
-      ? gameProfile(keys.rawg, Object.values(ratings), snapshots, ctrl.signal).then(async (profile) => {
-          if (!profile) return recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal);
-          setLikes(profile.top);
-          const r = await recommendFromProfile(keys.rawg, profile, known, ctrl.signal);
-          setNotes(r.notes);
-          return r.games;
-        })
-      : recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal);
-    run.then(setGames).catch((e: Error) => e.name !== 'AbortError' && setError(e.message));
-    return () => ctrl.abort();
+      ? gameProfile(keys.rawg, Object.values(ratings), snapshots, ctrl.signal)
+          .then(async (profile) => {
+            if (!profile) return byGenre();
+            setLikes(profile.top);
+            const r = await recommendFromProfile(keys.rawg, profile, known, ctrl.signal);
+            // RAWG may not answer in time; never leave the row empty.
+            if (r.games.length < 4) {
+              setNotes({});
+              setLikes([]);
+              return byGenre();
+            }
+            setNotes(r.notes);
+            return r.games;
+          })
+          .catch((e: Error) => {
+            if (e.name === 'AbortError') throw e;
+            setLikes([]);
+            return byGenre();
+          })
+      : byGenre();
+    // If RAWG doesn't answer at all, say so instead of showing empty cards forever.
+    const slow = setTimeout(() => setError('RAWG está tardando en responder. Probá de nuevo en un rato.'), 25000);
+    run
+      .then((g) => {
+        setError(null);
+        setGames(g);
+      })
+      .catch((e: Error) => e.name !== 'AbortError' && setError(e.message))
+      .finally(() => clearTimeout(slow));
+    return () => {
+      clearTimeout(slow);
+      ctrl.abort();
+    };
     // Recompute only when the taste changes, not on every list edit.
   }, [mode, key, tasteKey]);
 
@@ -134,7 +158,11 @@ function ForYou({ mode, keys }: { mode: Mode; keys: Keys }) {
     <GameRail
       title="Para vos"
       subtitle={
-        personal && likes.length
+        games === null && !error
+          ? personal
+            ? 'Armando tus recomendaciones…'
+            : undefined
+          : personal && likes.length
           ? `Te gusta: ${likes.join(', ')}`
           : because.length
             ? `Porque te gustó ${because.join(' y ')}`

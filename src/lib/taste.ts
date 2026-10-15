@@ -150,6 +150,27 @@ function ratingWeight(r: Rating, average: number): number {
   return w;
 }
 
+/**
+ * Runs a request that gives up after `ms` (RAWG's filtered searches can take
+ * very long or never answer). Gives null on timeout or error; only leaving the
+ * page (the parent signal) stops everything.
+ */
+function limited<T>(parent: AbortSignal | undefined, ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T | null> {
+  const ctrl = new AbortController();
+  const stop = () => ctrl.abort();
+  parent?.addEventListener('abort', stop);
+  const timer = setTimeout(stop, ms);
+  return run(ctrl.signal)
+    .catch((e: Error) => {
+      if (parent?.aborted) throw e;
+      return null;
+    })
+    .finally(() => {
+      clearTimeout(timer);
+      parent?.removeEventListener('abort', stop);
+    });
+}
+
 async function inBatches<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
   for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
 }
@@ -168,12 +189,9 @@ export async function gameProfile(
 
   const cache = facts();
   const missing = rated.filter((r) => !cache[r.gameId]);
-  await inBatches(missing, 4, async (r) => {
-    try {
-      cache[r.gameId] = await rawgTasteFacts(key, r.gameId.slice(5), signal);
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') throw e;
-    }
+  await inBatches(missing, 6, async (r) => {
+    const facts = await limited(signal, 8000, (s) => rawgTasteFacts(key, r.gameId.slice(5), s));
+    if (facts) cache[r.gameId] = facts;
   });
   if (missing.length) saveFacts();
 
@@ -237,7 +255,6 @@ export async function recommendFromProfile(
   signal?: AbortSignal,
 ): Promise<{ games: Game[]; notes: Record<string, string> }> {
   const today = new Date().toISOString().slice(0, 10);
-  const dates = `1985-01-01,${today}`;
   const topTags = strongest(profile.tags, 5).map(([id]) => id);
   const studios = strongest(profile.developers, 2);
   // Also start from each favourite game's most distinctive tags, so one
@@ -251,18 +268,15 @@ export async function recommendFromProfile(
       .map(([id]) => id)
       .join(',');
   const queries: { params: Record<string, string>; studio?: number }[] = [
-    ...topTags.map((id) => ({ params: { tags: String(id), ordering: '-added', dates } })),
-    ...[...new Set(favourites.map(signature).filter(Boolean))].map((tags) => ({ params: { tags, ordering: '-added', dates } })),
-    ...studios.map(([id]) => ({ params: { developers: String(id), ordering: '-added', dates }, studio: id })),
+    ...topTags.map((id) => ({ params: { tags: String(id), ordering: '-added' } })),
+    ...[...new Set(favourites.map(signature).filter(Boolean))].map((tags) => ({ params: { tags, ordering: '-added' } })),
+    ...studios.map(([id]) => ({ params: { developers: String(id), ordering: '-added' }, studio: id })),
   ];
   const pages = await Promise.all(
     queries.map((q) =>
-      rawgCandidates(key, q.params, signal)
-        .then((list) => list.map((c) => ({ c, studio: q.studio })))
-        .catch((e: Error) => {
-          if (e.name === 'AbortError') throw e;
-          return [];
-        }),
+      limited(signal, 9000, (sg) => rawgCandidates(key, q.params, sg)).then((list) =>
+        (list ?? []).map((c) => ({ c, studio: q.studio })),
+      ),
     ),
   );
 
