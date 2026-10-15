@@ -26,12 +26,41 @@ npm run dev
 
 La API key de RAWG es gratis: <https://rawg.io/apidocs>. También se puede pegar desde Ajustes dentro de la app.
 
-## Publicar en GitHub Pages
+## Deploy
 
-1. En el repo: **Settings → Pages → Source: GitHub Actions**.
-2. (Opcional) **Settings → Secrets → Actions**: crear `RAWG_KEY` con tu key, así no hace falta pegarla en la app.
-   Ojo: queda incluida en el JS publicado (RAWG está pensada para usarse así desde el navegador).
-3. Cada push a `main` despliega en `https://<usuario>.github.io/GamesTraker/`.
+### Servidor propio (CasaOS + Cloudflare Tunnel)
+
+Igual que la app de gastos: Docker con nginx en el puerto **3030**.
+
+Primera vez:
+
+```bash
+ssh genoud@familia
+cd /home/genoud
+git clone https://github.com/nicogenoud12-lgtm/GamesTraker.git
+cd GamesTraker
+echo "VITE_RAWG_KEY=tu_key_de_rawg" > .env
+docker compose up -d --build
+```
+
+En Cloudflare (**Networking → Tunnels → tu túnel → Routes**) agregar una ruta
+`juegos.genoud-nube.com.ar` → `http://10.0.0.69:3030`.
+
+Actualizar después de mergear un PR:
+
+```bash
+cd /home/genoud/GamesTraker
+git pull origin main
+docker compose up -d --build
+```
+
+La key de RAWG se mete en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
+volver a correr `docker compose up -d --build`.
+
+### Vercel (previews de PRs)
+
+Vercel está conectado al repo: cada PR tiene su link de preview para probar antes de mergear.
+La variable `VITE_RAWG_KEY` está cargada en Vercel (tipo Config, Production + Preview).
 
 ## Stack
 
