@@ -17,8 +17,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'GamesTraker',
-        short_name: 'GamesTraker',
+        name: 'GamesTracker',
+        short_name: 'GamesTracker',
         description: 'Puntuá los juegos que jugás y armá tu lista de próximos.',
         theme_color: '#0b0b10',
         background_color: '#0b0b10',

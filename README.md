@@ -1,4 +1,4 @@
-# GamesTraker
+# GamesTracker
 
 App para puntuar los juegos que vas jugando y armar tu lista de próximos… y lo mismo con series y películas.
 
@@ -102,7 +102,7 @@ Para juegos que no están en Steam se puede sumar, opcionalmente, la nota de cr�
 
 1. Entrá a <https://dev.twitch.tv/console> con tu cuenta de Twitch (hace falta tener activada la verificación
    en dos pasos) y tocá **Register Your Application**.
-2. Nombre: `GamesTraker`, OAuth Redirect URL: `http://localhost`, categoría: **Application Integration**,
+2. Nombre: `GamesTracker`, OAuth Redirect URL: `http://localhost`, categoría: **Application Integration**,
    tipo de cliente: **Confidential**.
 3. Abrí la app creada, copiá el **Client ID** y tocá **New Secret** para generar el **Client Secret**.
 4. Agregalos al `.env` del servidor y reiniciá con `docker compose up -d --build`:

@@ -110,12 +110,12 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines;
 }
 
-/** "GamesTraker" with the second half in the accent color, centred at y. */
+/** "GamesTracker" with the second half in the accent color, centred at y. */
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number, accent: string, size = 44) {
   ctx.font = `700 ${size}px "Space Grotesk"`;
   ctx.textBaseline = 'alphabetic';
   const a = 'Games';
-  const b = 'Traker';
+  const b = 'Tracker';
   const wa = ctx.measureText(a).width;
   const wb = ctx.measureText(b).width;
   const x = (W - wa - wb) / 2;

@@ -29,7 +29,7 @@ export default function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0d0d13] px-4 py-6 lg:flex">
       <Link to="/" className="px-3 font-display text-2xl font-bold tracking-tight">
-        Games<span className="grad-text">Traker</span>
+        Games<span className="grad-text">Tracker</span>
       </Link>
 
       <ModeSwitch compact className="mt-5" />
