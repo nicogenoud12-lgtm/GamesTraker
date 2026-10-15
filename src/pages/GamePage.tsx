@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Star } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
 import RatingSheet from '../components/RatingSheet';
+import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
 import { gameDetail, effectiveKey } from '../lib/catalog';
@@ -193,17 +194,17 @@ export default function GamePage() {
         {detail && detail.screenshots.length > 0 && (
           <section className="mt-7">
             <h2 className="mb-3 font-display text-lg font-bold">Capturas</h2>
-            <div className="no-scrollbar -mx-5 flex snap-x gap-3 overflow-x-auto px-5">
+            <ScrollRow className="-mx-5 flex gap-3 px-5">
               {detail.screenshots.map((s) => (
                 <img
                   key={s}
                   src={resizeImage(s, 640) ?? s}
                   alt=""
                   loading="lazy"
-                  className="aspect-video w-72 shrink-0 snap-start rounded-2xl object-cover"
+                  className="aspect-video w-72 shrink-0 rounded-2xl object-cover"
                 />
               ))}
-            </div>
+            </ScrollRow>
           </section>
         )}
 

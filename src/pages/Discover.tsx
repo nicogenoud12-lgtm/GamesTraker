@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SlidersHorizontal } from 'lucide-react';
 import GameRail from '../components/GameRail';
 import PageHeader from '../components/PageHeader';
+import ScrollRow from '../components/ScrollRow';
 import { discoverGames, effectiveKey, recommendGames } from '../lib/catalog';
 import { type DiscoverFilters, DEFAULT_FILTERS, GENRES, exploreLink } from '../lib/discover';
 import type { Game } from '../lib/types';
@@ -111,7 +112,7 @@ export default function Discover() {
         }
       />
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto px-5">
+      <ScrollRow className="flex gap-2 px-5">
         {GENRES.map((g) => (
           <Link
             key={g.slug}
@@ -121,7 +122,7 @@ export default function Discover() {
             {g.label}
           </Link>
         ))}
-      </div>
+      </ScrollRow>
 
       <ForYou apiKey={key} />
       {RAILS.map((r) => (

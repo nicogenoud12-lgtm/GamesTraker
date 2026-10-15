@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import GameCard, { GameCardSkeleton } from './GameCard';
+import ScrollRow from './ScrollRow';
 import type { Game } from '../lib/types';
 
 interface Props {
@@ -30,9 +31,9 @@ export default function GameRail({ title, subtitle, games, error, more }: Props)
       {error ? (
         <p className="px-5 text-sm text-rose-400">{error}</p>
       ) : (
-        <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1">
+        <ScrollRow className="flex gap-3 px-5 pb-1">
           {games ? games.map((g) => <GameCard key={g.id} game={g} />) : Array.from({ length: 4 }, (_, i) => <GameCardSkeleton key={i} />)}
-        </div>
+        </ScrollRow>
       )}
     </section>
   );
