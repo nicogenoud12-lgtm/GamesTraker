@@ -100,7 +100,7 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
   const kind = kindOf(game.id);
   const statuses = statusOptions(game.id);
   const platformChoices = kind
-    ? [...STREAMING.map((p) => p.label), ...(kind === 'movie' ? ['Cine'] : []), 'TV abierta / cable', 'Otro']
+    ? [...STREAMING.map((p) => p.label), 'Stremio', 'Nuvio', ...(kind === 'movie' ? ['Cine'] : []), 'TV abierta / cable', 'Otro']
     : game.platforms;
   const took = startedAt && finishedAt ? daysBetween(startedAt, finishedAt) : null;
   const hoursValue = parseHours(hours);
