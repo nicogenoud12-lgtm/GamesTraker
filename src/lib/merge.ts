@@ -1,4 +1,4 @@
-import type { Game, GameList, Rating } from './types';
+import type { Game, GameList, LogEntry, Rating } from './types';
 
 /** The part of the app state that is shared between devices. */
 export interface SyncData {
@@ -11,6 +11,9 @@ export interface SyncData {
   starts?: Record<string, string>;
   /** When each start date was set, so an edited date wins over an older one. */
   startsAt?: Record<string, number>;
+  /** Replays and rewatches for the diary; missing in documents saved by older versions. */
+  logs?: Record<string, LogEntry>;
+  logTombs?: Record<string, number>;
   /** Yearly goals per mode ("games-2026" → 30 titles); the most recently set wins. */
   goals?: Record<string, { target: number; updatedAt: number }>;
   /** API keys shared across devices; for each one, the most recently changed wins. */
@@ -43,6 +46,13 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
     if ((ratingTombs[id] ?? -1) < r.updatedAt) ratings[id] = r;
   }
 
+  const logTombs = newestTombs(a.logTombs ?? {}, b.logTombs ?? {});
+  const logs: Record<string, LogEntry> = {};
+  for (const id of new Set([...Object.keys(a.logs ?? {}), ...Object.keys(b.logs ?? {})])) {
+    const l = newest(a.logs?.[id], b.logs?.[id])!;
+    if ((logTombs[id] ?? -1) < l.updatedAt) logs[id] = l;
+  }
+
   const byId = new Map<string, GameList>();
   for (const l of [...a.lists, ...b.lists]) byId.set(l.id, newest(byId.get(l.id), l)!);
   const lists = [...byId.values()]
@@ -66,6 +76,8 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
     lists,
     ratingTombs,
     listTombs,
+    logs,
+    logTombs,
     ...mergeStarts(a, b),
     goals: mergeGoals(a.goals ?? {}, b.goals ?? {}),
     settings,

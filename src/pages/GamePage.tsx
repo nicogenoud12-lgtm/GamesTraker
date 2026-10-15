@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Share2, Star, Youtube } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Repeat2, Share2, Star, Youtube } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
 import RatingSheet from '../components/RatingSheet';
 import ScrollRow from '../components/ScrollRow';
@@ -9,6 +9,8 @@ import { ScoreRing, TierChip } from '../components/Score';
 import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/catalog';
 import ShareSheet from '../components/ShareSheet';
 import StartDate from '../components/StartDate';
+import { AgainHistory, AgainSheet } from '../components/Again';
+import { againLabel } from '../lib/diary';
 import { ratingCard } from '../lib/cards';
 import { slug } from '../lib/shareImage';
 import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/critics';
@@ -46,6 +48,7 @@ export default function GamePage() {
   const [rateOpen, setRateOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [againOpen, setAgainOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [series, setSeries] = useState<Game[] | null>(null);
   const [similar, setSimilar] = useState<Game[]>([]);
@@ -315,18 +318,29 @@ export default function GamePage() {
         <ListPlus size={16} /> {inLists.length ? `En ${inLists.length} lista${inLists.length > 1 ? 's' : ''}` : 'A una lista'}
       </button>
       {rating && (
-        <button
-          onClick={() => setShareOpen(true)}
-          className="col-span-2 flex items-center justify-center gap-2 rounded-2xl border border-line bg-surface py-2.5 text-sm font-semibold transition hover:border-white/20"
-        >
-          <Share2 size={16} /> Compartir mi puntaje
-        </button>
+        <>
+          <button
+            onClick={() => setAgainOpen(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-surface py-2.5 text-sm font-semibold transition hover:border-white/20"
+          >
+            <Repeat2 size={16} /> {againLabel(mode)}
+          </button>
+          <button
+            onClick={() => setShareOpen(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-surface py-2.5 text-sm font-semibold transition hover:border-white/20"
+          >
+            <Share2 size={16} /> Compartir
+          </button>
+        </>
       )}
       {playing && (
         <div className="col-span-2 -mt-2">
           <StartDate gameId={game.id} label={mode === 'games' ? 'Lo empezaste el' : 'La empezaste el'} />
         </div>
       )}
+      <div className="col-span-2 empty:hidden">
+        <AgainHistory gameId={game.id} />
+      </div>
     </div>
   );
 
@@ -427,6 +441,7 @@ export default function GamePage() {
     <>
       <RatingSheet game={game} open={rateOpen} onClose={() => setRateOpen(false)} avgHours={detail?.playtime} />
       <ListPickerSheet game={game} open={listOpen} onClose={() => setListOpen(false)} />
+      <AgainSheet game={game} open={againOpen} onClose={() => setAgainOpen(false)} />
       {rating && (
         <ShareSheet
           open={shareOpen}

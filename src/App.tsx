@@ -17,6 +17,7 @@ import Discover from './pages/Discover';
 import Explore from './pages/Explore';
 import Stats from './pages/Stats';
 import YearReview from './pages/YearReview';
+import Diary from './pages/Diary';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 import CoverTransition from './components/CoverTransition';
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/ajustes" element={<Settings />} />
           <Route path="/estadisticas" element={<Stats />} />
           <Route path="/resumen" element={<YearReview />} />
+          <Route path="/diario" element={<Diary />} />
           <Route path="/cuenta" element={<Account />} />
           <Route path="*" element={<Home />} />
         </Routes>

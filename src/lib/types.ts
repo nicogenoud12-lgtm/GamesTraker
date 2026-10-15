@@ -63,6 +63,17 @@ export interface Rating {
   updatedAt: number;
 }
 
+/** Another time a title was played or watched again (the first time is its rating). */
+export interface LogEntry {
+  id: string;
+  gameId: string;
+  /** Day it was finished again (YYYY-MM-DD). */
+  date: string;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface GameList {
   id: string;
   name: string;
