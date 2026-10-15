@@ -10,6 +10,8 @@ export interface Game {
   released: string | null;
   genres: string[];
   platforms: string[];
+  /** Only present on fresh API results; not kept in local snapshots. */
+  metacritic?: number | null;
 }
 
 export interface GameDetail extends Game {

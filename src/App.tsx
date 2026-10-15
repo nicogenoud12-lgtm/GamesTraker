@@ -8,6 +8,8 @@ import Lists from './pages/Lists';
 import ListDetail from './pages/ListDetail';
 import Library from './pages/Library';
 import Settings from './pages/Settings';
+import Discover from './pages/Discover';
+import Explore from './pages/Explore';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
@@ -16,6 +18,8 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/descubrir" element={<Discover />} />
+        <Route path="/descubrir/explorar" element={<Explore />} />
         <Route path="/buscar" element={<Search />} />
         <Route path="/juego/:id" element={<GamePage />} />
         <Route path="/listas" element={<Lists />} />
