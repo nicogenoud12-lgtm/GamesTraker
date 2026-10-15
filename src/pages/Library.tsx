@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LayoutGrid, Rows3 } from 'lucide-react';
+import { ChevronRight, LayoutGrid, Rows3 } from 'lucide-react';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreRing } from '../components/Score';
@@ -114,6 +114,9 @@ function Summary({ entries, avg }: { entries: Entry[]; avg: number }) {
         <p className="mt-1 truncate text-sm">
           Tu favorito: <span className="font-semibold">{best.game.name}</span>
         </p>
+        <Link to="/estadisticas" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-accent">
+          Ver estadísticas por año <ChevronRight size={14} />
+        </Link>
         <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-white/5">
           {TIERS.map((t) => {
             const n = entries.filter((e) => e.rating.tier === t.id).length;

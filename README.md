@@ -11,7 +11,10 @@ App para puntuar los juegos que vas jugando y armar tu lista de próximos.
   Sin API key funciona en modo demo con un catálogo chico.
 - **Mis juegos**: tu colección filtrada por palabra y ordenada por puntaje, fecha o nombre.
 - Es una **PWA**: en el celular, abrila en el navegador y elegí "Agregar a pantalla de inicio".
-- Todo se guarda en el dispositivo (localStorage). Desde Ajustes podés exportar/importar un backup.
+- **Sincronización** entre dispositivos a través del servidor propio (código en Ajustes). Sin sincronizar,
+  todo queda en el dispositivo; desde Ajustes también se puede exportar/importar un backup.
+- **Descubrir**: recomendaciones, rankings por año/década y explorador con filtros.
+- **De la misma saga** en la ficha de cada juego y **estadísticas por año**.
 
 Animaciones de [React Bits](https://reactbits.dev): Aurora (fondo del inicio), TiltedCard (carátula en la ficha)
 y CountUp (estadísticas), en `src/components/reactbits/`.
@@ -40,6 +43,7 @@ cd /home/genoud
 git clone https://github.com/nicogenoud12-lgtm/GamesTraker.git
 cd GamesTraker
 echo "VITE_RAWG_KEY=tu_key_de_rawg" > .env
+echo "SYNC_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d --build
 ```
 
@@ -53,6 +57,18 @@ cd /home/genoud/GamesTraker
 git pull origin main
 docker compose up -d --build
 ```
+
+### Sincronización
+
+`docker-compose.yml` levanta dos servicios: `web` (nginx con la app) y `api` (`server/`, la API de
+sincronización). nginx deriva `/api/` a la API, así que no hace falta otra ruta en Cloudflare.
+
+- El código de sincronización es el `SYNC_TOKEN` del `.env` (`cat .env` para verlo). Se pega una vez en
+  **Ajustes → Sincronizar dispositivos** en cada celu o compu.
+- Los datos quedan en el volumen `gamestraker_data` (`state.json` + una copia por día, se guardan las
+  últimas 30).
+- Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
+  borrado no vuelve a aparecer.
 
 La key de RAWG se mete en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
 volver a correr `docker compose up -d --build`.

@@ -127,7 +127,7 @@ export default function Home() {
 
       {rated.length > 0 && (
         <section className="mt-7 px-5">
-          <SectionTitle title="Tu escala" flush />
+          <SectionTitle title="Tu escala" to="/estadisticas" more="Estadísticas" flush />
           <div className="rounded-3xl border border-line bg-surface p-4">
             <div className="flex h-3 overflow-hidden rounded-full bg-white/5">
               {counts.map(({ tier, n }) =>
@@ -187,13 +187,13 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function SectionTitle({ title, to, flush }: { title: string; to?: string; flush?: boolean }) {
+function SectionTitle({ title, to, more = 'Ver todo', flush }: { title: string; to?: string; more?: string; flush?: boolean }) {
   return (
     <div className={`mb-3 flex items-center justify-between ${flush ? '' : 'px-5'}`}>
       <h2 className="font-display text-lg font-bold">{title}</h2>
       {to && (
         <Link to={to} className="flex items-center text-sm text-muted">
-          Ver todo <ChevronRight size={16} />
+          {more} <ChevronRight size={16} />
         </Link>
       )}
     </div>

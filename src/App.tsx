@@ -12,6 +12,7 @@ import Library from './pages/Library';
 import Settings from './pages/Settings';
 import Discover from './pages/Discover';
 import Explore from './pages/Explore';
+import Stats from './pages/Stats';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/listas/:id" element={<ListDetail />} />
         <Route path="/mis-juegos" element={<Library />} />
         <Route path="/ajustes" element={<Settings />} />
+        <Route path="/estadisticas" element={<Stats />} />
         <Route path="*" element={<Home />} />
       </Routes>
       <TabBar />

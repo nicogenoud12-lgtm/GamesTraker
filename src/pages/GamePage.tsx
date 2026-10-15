@@ -6,7 +6,8 @@ import RatingSheet from '../components/RatingSheet';
 import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
-import { gameDetail, effectiveKey } from '../lib/catalog';
+import { gameDetail, effectiveKey, seriesGames } from '../lib/catalog';
+import GameRail from '../components/GameRail';
 import { resizeImage } from '../lib/rawg';
 import { formatDate, year } from '../lib/format';
 import { STATUSES } from '../lib/tiers';
@@ -32,6 +33,17 @@ export default function GamePage() {
   const [rateOpen, setRateOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [series, setSeries] = useState<Game[] | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setSeries(null);
+    seriesGames(key, gameId, ctrl.signal)
+      .then(setSeries)
+      // The series row is a bonus: if it fails, just don't show it.
+      .catch(() => !ctrl.signal.aborted && setSeries([]));
+    return () => ctrl.abort();
+  }, [gameId, key]);
 
   useEffect(() => {
     let alive = true;
@@ -177,6 +189,12 @@ export default function GamePage() {
           </button>
         </div>
 
+      </div>
+
+      {/* Hidden until loaded: most games have no series, so no skeleton flash. */}
+      <GameRail title="De la misma saga" subtitle="Ordenados por fecha de salida" games={series ?? []} />
+
+      <div className="px-5">
         {detail?.description && (
           <section className="mt-7">
             <h2 className="mb-2 font-display text-lg font-bold">Sobre el juego</h2>
