@@ -44,7 +44,7 @@ export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
           {(game.genres.length > 0 || game.metacritic != null) && (
             <p className="truncate text-xs text-muted/70">
               {game.metacritic != null && <span className="mr-1.5 font-semibold text-emerald-300">
-                  {kind ? '★' : 'MC'} {game.metacritic}
+                  {kind || game.scoreLabel ? '★' : 'MC'} {game.metacritic}
                 </span>}
               {game.genres.slice(0, 3).join(', ')}
             </p>

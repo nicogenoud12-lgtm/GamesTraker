@@ -10,6 +10,9 @@ interface RawgGame {
   genres?: { name: string }[];
   platforms?: { platform: { name: string } }[] | null;
   metacritic?: number | null;
+  /** Users' average, 0–5. */
+  rating?: number;
+  ratings_count?: number;
 }
 
 interface RawgDetail extends RawgGame {
@@ -17,6 +20,7 @@ interface RawgDetail extends RawgGame {
   developers?: { name: string }[];
   publishers?: { name: string }[];
   metacritic: number | null;
+  metacritic_platforms?: { metascore: number }[];
   playtime: number | null;
   website: string | null;
 }
@@ -39,6 +43,16 @@ export function resizeImage(url: string | null, width: 420 | 640 | 1280): string
   );
 }
 
+/**
+ * Metacritic when RAWG has it; otherwise its users' average (0–5 → 0–100),
+ * which most games have even when the Metacritic field is empty.
+ */
+function score(g: RawgGame): { metacritic: number | null; scoreLabel?: string } {
+  if (g.metacritic) return { metacritic: g.metacritic };
+  if (g.rating && (g.ratings_count ?? 0) >= 20) return { metacritic: Math.round(g.rating * 20), scoreLabel: 'RAWG' };
+  return { metacritic: null };
+}
+
 function toGame(g: RawgGame): Game {
   return {
     id: `rawg:${g.id}`,
@@ -47,7 +61,7 @@ function toGame(g: RawgGame): Game {
     released: g.released,
     genres: (g.genres ?? []).map((x) => x.name),
     platforms: (g.platforms ?? []).map((x) => x.platform.name),
-    metacritic: g.metacritic ?? null,
+    ...score(g),
   };
 }
 
@@ -109,7 +123,8 @@ export async function rawgDetail(key: string, rawgId: string): Promise<GameDetai
     description: g.description_raw ?? '',
     developers: (g.developers ?? []).map((x) => x.name),
     publishers: (g.publishers ?? []).map((x) => x.name),
-    metacritic: g.metacritic,
+    // The detail sometimes only has the per-platform metascores.
+    ...score({ ...g, metacritic: g.metacritic || Math.max(0, ...(g.metacritic_platforms ?? []).map((p) => p.metascore)) || null }),
     playtime: g.playtime || null,
     website: g.website || null,
     screenshots: shots.results.map((s) => s.image),

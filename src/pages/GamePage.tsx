@@ -148,7 +148,7 @@ export default function GamePage() {
       ))}
       {detail?.metacritic != null && (
         <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-          {detail.scoreLabel ?? 'Metacritic'} {detail.metacritic}
+          {detail.scoreLabel === 'RAWG' ? 'Usuarios RAWG' : (detail.scoreLabel ?? 'Metacritic')} {detail.metacritic}
         </span>
       )}
     </>
@@ -326,14 +326,16 @@ export default function GamePage() {
           : (resizeImage(game.cover, 1280) ?? undefined);
     return (
       <div className="pb-6">
-        <div className="relative -mx-6 h-[360px] overflow-hidden">
-          {wide && <img src={wide} alt="" className="h-full w-full scale-110 object-cover opacity-45 blur-md" />}
-          <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/50 to-bg/10" />
-          <div className="absolute inset-0 bg-gradient-to-r from-bg/80 to-transparent" />
+        <div className="relative h-[360px]">
+          <div className="bleed absolute inset-y-0 overflow-hidden">
+            {wide && <img src={wide} alt="" className="h-full w-full scale-110 object-cover opacity-45 blur-md" />}
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/50 to-bg/10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-bg/70 via-transparent to-bg/40" />
+          </div>
           <button
             onClick={goBack}
             aria-label="Volver"
-            className="absolute top-6 left-6 flex items-center gap-2 rounded-full bg-black/40 py-2 pr-4 pl-3 text-sm font-semibold backdrop-blur transition hover:bg-black/60"
+            className="absolute top-6 left-0 flex items-center gap-2 rounded-full bg-black/40 py-2 pr-4 pl-3 text-sm font-semibold backdrop-blur transition hover:bg-black/60"
           >
             <ArrowLeft size={18} /> Volver
           </button>

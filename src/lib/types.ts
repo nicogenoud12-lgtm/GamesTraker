@@ -14,6 +14,8 @@ export interface Game {
   platforms: string[];
   /** Only present on fresh API results; not kept in local snapshots. */
   metacritic?: number | null;
+  /** Where `metacritic` comes from when it isn't Metacritic (e.g. "TMDB", "RAWG"). */
+  scoreLabel?: string;
 }
 
 export interface Provider {
@@ -29,8 +31,6 @@ export interface GameDetail extends Game {
   playtime: number | null;
   website: string | null;
   screenshots: string[];
-  /** Label for `metacritic` when the score comes from elsewhere (e.g. "TMDB"). */
-  scoreLabel?: string;
   /** Extra facts for the info grid (runtime, seasons…). */
   facts?: { label: string; value: string }[];
   /** Streaming services in Argentina. */

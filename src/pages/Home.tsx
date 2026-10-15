@@ -271,7 +271,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
 
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute -top-0 -right-6 -left-6 h-64 opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]">
+      <div className="pointer-events-none bleed absolute top-0 h-72 opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]">
         <Aurora key={mode} colorStops={copy.glow} amplitude={1.1} blend={0.6} speed={0.5} mouseInteraction={false} />
       </div>
 
