@@ -8,15 +8,16 @@ import { useSync } from '../store/useSync';
 
 export interface FriendSummary {
   username: string;
-  /** False when that friend hides their ratings. */
+  /** That friend shares their ratings with me. */
   shares: boolean;
+  /** I share mine with them (off until I turn it on). */
+  iShare: boolean;
   games?: { count: number; average: number | null };
   screen?: { count: number; average: number | null };
 }
 
 export interface FriendsOverview {
   code: string;
-  shareRatings: boolean;
   announce: boolean;
   friends: FriendSummary[];
 }
@@ -43,8 +44,10 @@ export const getFriends = () => api<FriendsOverview>('GET', '/friends');
 export const addFriend = (code: string) => api<{ username: string }>('POST', '/friends/add', { code });
 export const removeFriend = (username: string) => api<{ ok: true }>('POST', '/friends/remove', { username });
 export const newInviteCode = () => api<{ code: string }>('POST', '/friends/code');
-export const saveSocialSettings = (s: { shareRatings?: boolean; announce?: boolean }) =>
-  api<{ shareRatings: boolean; announce: boolean }>('POST', '/friends/settings', s);
+export const saveSocialSettings = (s: { announce?: boolean }) => api<{ announce: boolean }>('POST', '/friends/settings', s);
+/** Lets one friend see my ratings, or stops it. */
+export const shareWith = (username: string, share: boolean) =>
+  api<{ username: string; iShare: boolean }>('POST', '/friends/share', { username, share });
 export const friendRatings = (id: string) =>
   api<{ ratings: FriendRating[] }>('GET', `/friends/ratings?${new URLSearchParams({ id })}`).then((r) => r.ratings);
 export const friendFeed = () => api<{ items: FeedItem[] }>('GET', '/friends/feed').then((r) => r.items);

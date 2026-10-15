@@ -445,7 +445,7 @@ async function publicProfile(name, viewer = null) {
   const username = normalize(name);
   const user = (await loadUsers()).users.find((u) => u.username === username);
   // Friends see each other's tier list unless they turned that off; anyone sees a public one.
-  const allowed = user && (user.public || viewer?.id === user.id || (areFriends(viewer, user) && sharesRatings(user)));
+  const allowed = user && (user.public || viewer?.id === user.id || canSee(viewer, user));
   if (!allowed) throw new HttpError(404, 'Este perfil no existe o no es público');
   const doc = await readJson(stateFile(user.id), { updatedAt: null, data: null });
   const data = doc.data ?? { games: {}, ratings: {}, lists: [] };
@@ -473,9 +473,9 @@ async function publicProfile(name, viewer = null) {
 }
 
 // ---------- friends ----------
-// Friendship is mutual and starts from a personal invite link (friendCode). Friends see
-// each other's ratings unless they hide them (shareRatings, on by default). With
-// "announce" (off by default) friends also get a notification for each new rating.
+// Friendship is mutual and starts from a personal invite link (friendCode). Nothing is
+// shared by default: each person picks which friends see their ratings (sharesWith).
+// With "announce" (off by default) those friends also get a notification for each new rating.
 
 const SCREEN_ID = /^(tmdb|dscr):/;
 const TIER_EMOJI = { malo: '💀', aburrido: '😴', safa: '🤷', bueno: '👍', buenisimo: '🔥', historico: '👑' };
@@ -483,8 +483,9 @@ const MAX_FRIENDS = 200;
 const FEED_SIZE = 80;
 const ACTIVITY_KEEP = 100;
 
-const sharesRatings = (u) => u.shareRatings !== false;
 const areFriends = (a, b) => Boolean(a && b && a.id !== b.id && (a.friends ?? []).includes(b.id) && (b.friends ?? []).includes(a.id));
+/** Whether `viewer` may see `owner`'s ratings: friends, and `owner` chose to share with them. */
+const canSee = (viewer, owner) => areFriends(viewer, owner) && (owner.sharesWith ?? []).includes(viewer.id);
 const newCode = () => randomBytes(9).toString('base64url');
 const safeCover = (c) => (typeof c === 'string' && c.startsWith('https://') ? c : null);
 const gameCard = (g, id) => ({ id, name: str(g?.name) ?? '?', cover: safeCover(g?.cover), released: str(g?.released, 10), genres: [], platforms: [] });
@@ -532,12 +533,14 @@ async function friendsOverview(user) {
   const friends = await Promise.all(
     (await friendsOf(user)).map(async (f) => ({
       username: f.username,
-      shares: sharesRatings(f),
-      ...(sharesRatings(f) ? summary(await readData(f.id)) : {}),
+      // They share with me / I share with them.
+      shares: canSee(user, f),
+      iShare: canSee(f, user),
+      ...(canSee(user, f) ? summary(await readData(f.id)) : {}),
     })),
   );
   friends.sort((a, b) => a.username.localeCompare(b.username));
-  return { code, shareRatings: sharesRatings(user), announce: Boolean(user.announce), friends };
+  return { code, announce: Boolean(user.announce), friends };
 }
 
 async function inviteInfo(code) {
@@ -566,7 +569,22 @@ function removeFriend(user, username) {
     if (!other) return { ok: true };
     me.friends = (me.friends ?? []).filter((id) => id !== other.id);
     other.friends = (other.friends ?? []).filter((id) => id !== me.id);
+    me.sharesWith = (me.sharesWith ?? []).filter((id) => id !== other.id);
+    other.sharesWith = (other.sharesWith ?? []).filter((id) => id !== me.id);
     return { ok: true };
+  });
+}
+
+/** Turns sharing my ratings with one friend on or off. */
+function shareWith(user, username, share) {
+  if (typeof share !== 'boolean') throw new HttpError(400, 'Formato inválido');
+  return updateUsers((db) => {
+    const me = db.users.find((u) => u.id === user.id);
+    const other = db.users.find((u) => u.username === normalize(username));
+    if (!areFriends(me, other)) throw new HttpError(404, 'No son amigos');
+    const rest = (me.sharesWith ?? []).filter((id) => id !== other.id);
+    me.sharesWith = share ? [...rest, other.id] : rest;
+    return { username: other.username, iShare: share };
   });
 }
 
@@ -581,9 +599,8 @@ function resetCode(user) {
 function socialSettings(user, body) {
   return updateUsers((db) => {
     const me = db.users.find((u) => u.id === user.id);
-    if (typeof body.shareRatings === 'boolean') me.shareRatings = body.shareRatings;
     if (typeof body.announce === 'boolean') me.announce = body.announce;
-    return { shareRatings: sharesRatings(me), announce: Boolean(me.announce) };
+    return { announce: Boolean(me.announce) };
   });
 }
 
@@ -592,7 +609,7 @@ async function friendRatings(user, gameId) {
   if (!gameId) throw new HttpError(400, 'Falta el id');
   const out = [];
   for (const f of await friendsOf(user)) {
-    if (!sharesRatings(f)) continue;
+    if (!canSee(user, f)) continue;
     const r = (await readData(f.id)).ratings?.[gameId];
     if (typeof r?.score === 'number') out.push({ username: f.username, score: r.score, tier: str(r.tier, 20), status: str(r.status, 20) });
   }
@@ -603,7 +620,7 @@ async function friendRatings(user, gameId) {
 async function friendFeed(user) {
   const items = [];
   for (const f of await friendsOf(user)) {
-    if (!sharesRatings(f)) continue;
+    if (!canSee(user, f)) continue;
     const data = await readData(f.id);
     for (const [id, r] of Object.entries(data.ratings ?? {})) {
       if (typeof r?.score !== 'number' || !data.games?.[id]) continue;
@@ -650,6 +667,8 @@ async function announce(user, events) {
     await writeJson(activityFile(user.id), [...events, ...list].slice(0, ACTIVITY_KEEP));
   });
   for (const f of await friendsOf(user)) {
+    // Only the friends this person shares with hear about it.
+    if (!canSee(f, user)) continue;
     const subs = await readJson(pushFile(f.id), []);
     if (!subs.length) continue;
     const gone = new Set();
@@ -678,7 +697,7 @@ async function announce(user, events) {
 async function notifications(user) {
   const items = [];
   for (const f of await friendsOf(user)) {
-    if (!sharesRatings(f)) continue;
+    if (!canSee(user, f)) continue;
     for (const e of await readJson(activityFile(f.id), [])) items.push({ ...e, username: f.username });
   }
   items.sort((a, b) => b.at - a.at);
@@ -845,7 +864,7 @@ async function handle(req, res) {
         await backupOncePerDay(user.id, doc);
         const next = { version: doc.version + 1, updatedAt: new Date().toISOString(), data: body.data };
         await writeJson(stateFile(user.id), next);
-        return { status: 200, body: { version: next.version, updatedAt: next.updatedAt }, events: user.announce && sharesRatings(user) ? newRatings(doc.data, body.data) : [] };
+        return { status: 200, body: { version: next.version, updatedAt: next.updatedAt }, events: user.announce && (user.sharesWith ?? []).length ? newRatings(doc.data, body.data) : [] };
       });
       send(res, out.status, out.body);
       // Friends hear about new ratings after the device already got its answer.
@@ -860,6 +879,10 @@ async function handle(req, res) {
       return send(res, 200, await removeFriend(await authenticate(req), (await readBody(req)).username));
     case 'POST /api/friends/code':
       return send(res, 200, await resetCode(await authenticate(req)));
+    case 'POST /api/friends/share': {
+      const body = await readBody(req);
+      return send(res, 200, await shareWith(await authenticate(req), body.username, body.share));
+    }
     case 'POST /api/friends/settings':
       return send(res, 200, await socialSettings(await authenticate(req), await readBody(req)));
     case 'GET /api/friends/ratings':

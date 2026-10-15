@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Bell, Copy, EyeOff, Loader2, Share2, UserMinus, UserPlus, Users } from 'lucide-react';
+import type { FriendSummary } from '../lib/social';
 import Cover from '../components/Cover';
 import { ScoreBadge } from '../components/Score';
 import { MODES, modeOf } from '../lib/mode';
@@ -12,6 +13,7 @@ import {
   markNoticesSeen,
   refreshNotices,
   removeFriend,
+  shareWith,
   timeAgo,
   useNotices,
   type FeedItem,
@@ -58,7 +60,7 @@ export default function Friends() {
     }
     addFriend(code)
       .then((r) => {
-        toast(`Ahora sos amigo de ${r.username}`);
+        toast(`Ahora sos amigo de ${r.username}. Elegí si compartirle tus puntajes.`);
         load();
       })
       .catch((e: Error) => toast(e.message))
@@ -158,44 +160,19 @@ export default function Friends() {
           </p>
         ) : (
           <ul className="divide-y divide-white/5 rounded-3xl border border-line bg-surface">
-            {overview.friends.map((f) => {
-              const stats = f[mode];
-              return (
-                <li key={f.username} className="flex items-center gap-3 p-3">
-                  <Avatar name={f.username} />
-                  {f.shares ? (
-                    <Link
-                      to={`/p/${encodeURIComponent(f.username)}?modo=${mode === 'games' ? 'juegos' : 'series-y-pelis'}`}
-                      className="min-w-0 flex-1"
-                    >
-                      <p className="truncate font-semibold">{f.username}</p>
-                      <p className="text-xs text-muted">
-                        {stats?.count ? `${stats.count} ${stats.count === 1 ? copy.item : copy.items} · promedio ${stats.average}` : `Todavía no puntuó ${copy.items}`}
-                      </p>
-                    </Link>
-                  ) : (
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{f.username}</p>
-                      <p className="flex items-center gap-1 text-xs text-muted">
-                        <EyeOff size={12} /> Prefiere no mostrar sus puntajes
-                      </p>
-                    </div>
-                  )}
-                  <button
-                    aria-label={`Dejar de ser amigo de ${f.username}`}
-                    onClick={() => {
-                      if (!confirm(`¿Dejar de ser amigo de ${f.username}? Ninguno va a ver los puntajes del otro.`)) return;
-                      removeFriend(f.username)
-                        .then(load)
-                        .catch((e: Error) => toast(e.message));
-                    }}
-                    className="rounded-full p-2 text-muted hover:bg-white/5 hover:text-white"
-                  >
-                    <UserMinus size={16} />
-                  </button>
-                </li>
-              );
-            })}
+            {overview.friends.map((f) => (
+              <FriendRow
+                key={f.username}
+                friend={f}
+                profileTo={`/p/${encodeURIComponent(f.username)}?modo=${mode === 'games' ? 'juegos' : 'series-y-pelis'}`}
+                statsText={
+                  f[mode]?.count
+                    ? `${f[mode]!.count} ${f[mode]!.count === 1 ? copy.item : copy.items} · promedio ${f[mode]!.average}`
+                    : `Todavía no puntuó ${copy.items}`
+                }
+                onChanged={load}
+              />
+            ))}
           </ul>
         )}
       </section>
@@ -213,7 +190,7 @@ export default function Friends() {
       )}
 
       <p className="mt-8 text-center text-xs text-muted">
-        Elegí qué ven tus amigos y si les llegan avisos en{' '}
+        Con quién compartís lo elegís acá, uno por uno. Los avisos se prenden en{' '}
         <Link to="/ajustes" className="font-semibold text-accent">
           Ajustes
         </Link>
@@ -246,6 +223,73 @@ export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
     >
       {name[0]}
     </span>
+  );
+}
+
+/** One friend: what they share with me, and whether I share with them. */
+function FriendRow({ friend: f, profileTo, statsText, onChanged }: { friend: FriendSummary; profileTo: string; statsText: string; onChanged: () => void }) {
+  const toast = useToast((s) => s.show);
+  const [iShare, setIShare] = useState(f.iShare);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setIShare(f.iShare), [f.iShare]);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const r = await shareWith(f.username, !iShare);
+      setIShare(r.iShare);
+      toast(r.iShare ? `${f.username} ahora ve tus puntajes` : `${f.username} ya no ve tus puntajes`);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="p-3">
+      <div className="flex items-center gap-3">
+        <Avatar name={f.username} />
+        {f.shares ? (
+          <Link to={profileTo} className="min-w-0 flex-1">
+            <p className="truncate font-semibold">{f.username}</p>
+            <p className="text-xs text-muted">{statsText}</p>
+          </Link>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold">{f.username}</p>
+            <p className="flex items-center gap-1 text-xs text-muted">
+              <EyeOff size={12} /> No te comparte sus puntajes
+            </p>
+          </div>
+        )}
+        <button
+          aria-label={`Dejar de ser amigo de ${f.username}`}
+          onClick={() => {
+            if (!confirm(`¿Dejar de ser amigo de ${f.username}? Ninguno va a ver los puntajes del otro.`)) return;
+            removeFriend(f.username)
+              .then(onChanged)
+              .catch((e: Error) => toast(e.message));
+          }}
+          className="rounded-full p-2 text-muted hover:bg-white/5 hover:text-white"
+        >
+          <UserMinus size={16} />
+        </button>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2 sm:ml-[52px]">
+        <span className="text-xs text-muted">Compartirle mis puntajes</span>
+        <button
+          role="switch"
+          aria-checked={iShare}
+          aria-label={`Compartir mis puntajes con ${f.username}`}
+          onClick={toggle}
+          disabled={busy}
+          className={`relative h-6 w-10 shrink-0 rounded-full transition disabled:opacity-60 ${iShare ? 'bg-accent' : 'bg-white/15'}`}
+        >
+          <span className={`absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${iShare ? 'translate-x-4' : ''}`} />
+        </button>
+      </div>
+    </li>
   );
 }
 
