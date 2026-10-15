@@ -1,7 +1,7 @@
 name: Build
 
-# Arma la misma imagen de Docker que usa el servidor, para saber antes de
-# mergear que el PR compila.
+# Arma las mismas imágenes de Docker que usa el servidor (app y API de
+# sincronización), para saber antes de mergear que el PR compila.
 on:
   pull_request:
   push:
@@ -12,5 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Armar la imagen del servidor
-        run: docker build -t gamestraker .
+      - name: Armar las imágenes del servidor
+        run: docker compose build
+      - name: Probar la API de sincronización
+        run: |
+          docker run -d --name api -p 8787:8787 -e SYNC_TOKEN=token-de-prueba-ci gamestraker-api
+          for i in $(seq 1 20); do curl -sf localhost:8787/api/health && break; sleep 1; done
+          curl -sf -H "Authorization: Bearer token-de-prueba-ci" -X PUT \
+            -d '{"baseVersion":0,"data":{"games":{},"ratings":{},"lists":[]}}' localhost:8787/api/state
+          curl -sf -H "Authorization: Bearer token-de-prueba-ci" localhost:8787/api/state | grep -q '"version":1'

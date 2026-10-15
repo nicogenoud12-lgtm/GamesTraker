@@ -135,3 +135,9 @@ export async function rawgDiscover(
   const data = await get<{ results: RawgGame[]; next: string | null }>(key, '/games', params, signal);
   return { games: data.results.map(toGame), hasMore: Boolean(data.next) };
 }
+
+/** Other games of the same series (RAWG's game-series endpoint). */
+export async function rawgSeries(key: string, rawgId: string, signal?: AbortSignal): Promise<Game[]> {
+  const data = await get<{ results: RawgGame[] }>(key, `/games/${rawgId}/game-series`, { page_size: '40' }, signal);
+  return data.results.map(toGame);
+}

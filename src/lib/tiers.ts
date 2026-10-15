@@ -11,7 +11,7 @@ export interface Tier {
 
 export const TIERS: Tier[] = [
   { id: 'malo', label: 'Malo', emoji: '💀', min: 0, color: '#f43f5e' },
-  { id: 'aburrido', label: 'Aburrido', emoji: '😴', min: 35, color: '#fb923c' },
+  { id: 'aburrido', label: 'Aburrido', emoji: '😴', min: 35, color: '#ff8a3d' },
   { id: 'safa', label: 'Safa', emoji: '🤷', min: 50, color: '#facc15' },
   { id: 'bueno', label: 'Bueno', emoji: '👍', min: 65, color: '#4ade80' },
   { id: 'buenisimo', label: 'Buenísimo', emoji: '🔥', min: 80, color: '#22d3ee' },

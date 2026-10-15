@@ -8,6 +8,8 @@ const base = process.env.BASE_PATH ?? '/';
 
 export default defineConfig({
   base,
+  // In development the sync API runs separately (node server/index.mjs).
+  server: { proxy: { '/api': 'http://localhost:8787' } },
   plugins: [
     react(),
     tailwindcss(),
@@ -31,6 +33,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
           {

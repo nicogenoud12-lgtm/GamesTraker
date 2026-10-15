@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Compass, Play, Search, Settings } from 'lucide-react';
+import { ChevronRight, Cloud, CloudOff, Compass, Play, RefreshCw, Search, Settings } from 'lucide-react';
+import { useSync } from '../store/useSync';
 import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
@@ -46,9 +47,12 @@ export default function Home() {
             <h1 className="font-display text-2xl font-bold tracking-tight">
               Games<span className="grad-text">Traker</span>
             </h1>
-            <Link to="/ajustes" aria-label="Ajustes" className="rounded-full bg-white/10 p-2.5 backdrop-blur">
-              <Settings size={18} />
-            </Link>
+            <div className="flex items-center gap-2">
+              <SyncBadge />
+              <Link to="/ajustes" aria-label="Ajustes" className="rounded-full bg-white/10 p-2.5 backdrop-blur">
+                <Settings size={18} />
+              </Link>
+            </div>
           </div>
 
           <div className="mt-6 grid grid-cols-3 gap-2">
@@ -123,7 +127,7 @@ export default function Home() {
 
       {rated.length > 0 && (
         <section className="mt-7 px-5">
-          <SectionTitle title="Tu escala" flush />
+          <SectionTitle title="Tu escala" to="/estadisticas" more="Estadísticas" flush />
           <div className="rounded-3xl border border-line bg-surface p-4">
             <div className="flex h-3 overflow-hidden rounded-full bg-white/5">
               {counts.map(({ tier, n }) =>
@@ -183,15 +187,31 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function SectionTitle({ title, to, flush }: { title: string; to?: string; flush?: boolean }) {
+function SectionTitle({ title, to, more = 'Ver todo', flush }: { title: string; to?: string; more?: string; flush?: boolean }) {
   return (
     <div className={`mb-3 flex items-center justify-between ${flush ? '' : 'px-5'}`}>
       <h2 className="font-display text-lg font-bold">{title}</h2>
       {to && (
         <Link to={to} className="flex items-center text-sm text-muted">
-          Ver todo <ChevronRight size={16} />
+          {more} <ChevronRight size={16} />
         </Link>
       )}
     </div>
+  );
+}
+
+function SyncBadge() {
+  const status = useSync((s) => s.status);
+  if (status === 'off') return null;
+  const label = status === 'error' ? 'Error al sincronizar' : status === 'syncing' ? 'Sincronizando' : 'Sincronizado';
+  return (
+    <Link
+      to="/ajustes"
+      aria-label={label}
+      title={label}
+      className={`rounded-full bg-white/10 p-2.5 backdrop-blur ${status === 'error' ? 'text-rose-400' : 'text-emerald-300'}`}
+    >
+      {status === 'error' ? <CloudOff size={18} /> : status === 'syncing' ? <RefreshCw size={18} className="animate-spin" /> : <Cloud size={18} />}
+    </Link>
   );
 }

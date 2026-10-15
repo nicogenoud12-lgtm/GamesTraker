@@ -1,6 +1,6 @@
 import { DEMO_GAMES, demoSearch } from '../data/demo';
 import { type DiscoverFilters, filterDemo, genreSlug, toRawgQuery } from './discover';
-import { rawgDetail, rawgDiscover, rawgPopular, rawgSearch } from './rawg';
+import { rawgDetail, rawgDiscover, rawgPopular, rawgSearch, rawgSeries } from './rawg';
 import type { Game, GameDetail } from './types';
 
 // Single entry point for game data: RAWG when a key is configured, otherwise
@@ -84,4 +84,20 @@ export async function recommendGames(
     }
   }
   return out;
+}
+
+/** Games of the same series, oldest first. The demo catalog matches by title prefix. */
+export async function seriesGames(key: string, id: string, signal?: AbortSignal): Promise<Game[]> {
+  const [source, ref] = id.split(':');
+  let games: Game[] = [];
+  if (source === 'rawg' && key) {
+    games = await rawgSeries(key, ref, signal);
+  } else if (source === 'demo') {
+    const self = DEMO_GAMES.find((g) => g.id === id);
+    const stem = (name: string) => name.split(/[:\-–]/)[0].replace(/\s+(II|2|Part.*)$/i, '').trim().toLowerCase();
+    if (self) games = DEMO_GAMES.filter((g) => g.id !== id && stem(g.name) === stem(self.name));
+  }
+  return games
+    .filter((g) => g.id !== id)
+    .sort((a, b) => (a.released ?? '9999').localeCompare(b.released ?? '9999'));
 }

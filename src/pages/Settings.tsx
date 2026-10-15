@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Download, ExternalLink, KeyRound, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { syncNow, testToken } from '../lib/sync';
+import { useSync } from '../store/useSync';
 import { hasEnvKey } from '../lib/catalog';
 import { rawgSearch } from '../lib/rawg';
 import { useStore } from '../store/useStore';
@@ -107,10 +109,12 @@ export default function Settings() {
           )}
         </section>
 
+        <SyncSection />
+
         <section className="rounded-3xl border border-line bg-surface p-5">
           <h2 className="font-display text-lg font-bold">Tus datos</h2>
           <p className="mt-2 text-sm text-muted">
-            Todo se guarda en este dispositivo. Exportá un backup para no perderlo o pasarlo a otro celular.
+            Exportá un backup en un archivo, por si querés guardarlo aparte o pasarlo sin sincronizar.
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button onClick={exportData} className="flex items-center justify-center gap-2 rounded-2xl bg-surface-2 py-3 text-sm font-semibold">
@@ -141,5 +145,91 @@ export default function Settings() {
         </p>
       </div>
     </div>
+  );
+}
+
+function SyncSection() {
+  const { token, status, error, lastSyncAt, setToken } = useSync();
+  const toast = useToast((s) => s.show);
+  const [draft, setDraft] = useState('');
+  const [testing, setTesting] = useState(false);
+
+  const connect = async () => {
+    if (!draft.trim()) return;
+    setTesting(true);
+    try {
+      await testToken(draft);
+      setToken(draft);
+      setDraft('');
+      toast('Sincronización activada');
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-3xl border border-line bg-surface p-5">
+      <div className="flex items-center gap-2">
+        <Cloud size={18} className="text-accent" />
+        <h2 className="font-display text-lg font-bold">Sincronizar dispositivos</h2>
+      </div>
+      {token ? (
+        <>
+          <p className="mt-2 text-sm text-muted">
+            Tus puntajes y listas se guardan en tu servidor y se comparten con los dispositivos que tengan el mismo código.
+          </p>
+          <p className={`mt-3 flex items-center gap-1.5 text-sm ${status === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
+            {status === 'syncing' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            {status === 'error'
+              ? error
+              : status === 'syncing'
+                ? 'Sincronizando…'
+                : `Sincronizado${lastSyncAt ? ` · ${new Date(lastSyncAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => void syncNow()}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-surface-2 py-3 text-sm font-semibold"
+            >
+              <RefreshCw size={16} /> Sincronizar ahora
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('¿Desconectar este dispositivo? Tus datos quedan acá y en el servidor.')) setToken('');
+              }}
+              className="rounded-2xl bg-surface-2 py-3 text-sm font-semibold text-muted"
+            >
+              Desconectar
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-muted">
+            Pegá el código de sincronización (el <code className="text-white/80">SYNC_TOKEN</code> del servidor) para tener
+            los mismos juegos en el celu y en la compu. Hacelo una vez en cada dispositivo.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Código de sincronización"
+              type="password"
+              autoComplete="off"
+              className="min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-4 py-3 font-mono text-sm placeholder:font-sans placeholder:text-muted/60"
+            />
+            <button
+              onClick={connect}
+              disabled={testing || !draft.trim()}
+              className="flex items-center rounded-2xl bg-white px-4 font-semibold text-black disabled:opacity-50"
+            >
+              {testing ? <Loader2 size={18} className="animate-spin" /> : 'Conectar'}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

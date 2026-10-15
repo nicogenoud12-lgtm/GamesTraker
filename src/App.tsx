@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { startSync } from './lib/sync';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
 import Home from './pages/Home';
@@ -10,9 +12,12 @@ import Library from './pages/Library';
 import Settings from './pages/Settings';
 import Discover from './pages/Discover';
 import Explore from './pages/Explore';
+import Stats from './pages/Stats';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
+  useEffect(() => startSync(), []);
+
   return (
     <div className="mx-auto min-h-dvh max-w-lg pb-28">
       <ScrollToTop />
@@ -26,6 +31,7 @@ export default function App() {
         <Route path="/listas/:id" element={<ListDetail />} />
         <Route path="/mis-juegos" element={<Library />} />
         <Route path="/ajustes" element={<Settings />} />
+        <Route path="/estadisticas" element={<Stats />} />
         <Route path="*" element={<Home />} />
       </Routes>
       <TabBar />
