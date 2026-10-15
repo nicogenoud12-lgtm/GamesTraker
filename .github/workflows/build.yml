@@ -1,0 +1,16 @@
+name: Build
+
+# Arma la misma imagen de Docker que usa el servidor, para saber antes de
+# mergear que el PR compila.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar la imagen del servidor
+        run: docker build -t gamestraker .

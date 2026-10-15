@@ -57,10 +57,10 @@ docker compose up -d --build
 La key de RAWG se mete en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
 volver a correr `docker compose up -d --build`.
 
-### Vercel (previews de PRs)
+### Chequeo de PRs
 
-Vercel está conectado al repo: cada PR tiene su link de preview para probar antes de mergear.
-La variable `VITE_RAWG_KEY` está cargada en Vercel (tipo Config, Production + Preview).
+Cada PR corre el workflow **Build** (`.github/workflows/build.yml`), que arma la misma imagen de Docker
+que el servidor. Si queda en verde, el PR compila y se puede mergear.
 
 ## Stack
 
