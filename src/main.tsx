@@ -7,13 +7,16 @@ import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/700.css';
 import './index.css';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
 registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HashRouter>
-      <App />
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </ErrorBoundary>
   </StrictMode>,
 );
