@@ -1,5 +1,5 @@
 import { mergeData, stableStringify, type SyncData } from './merge';
-import type { Game, GameList, Rating } from './types';
+import type { Game, Rating } from './types';
 import { useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
 
@@ -129,13 +129,12 @@ export async function setProfilePublic(value: boolean): Promise<Profile> {
   return (await api<{ user: Profile }>('POST', '/profile', { public: value })).user;
 }
 
-/** What the server shares of a public profile: no notes, platforms or keys. */
+/** What the server shares of a public profile: the tier list only (no lists, notes, platforms or keys). */
 export interface PublicProfile {
   username: string;
   updatedAt: string | null;
   games: Record<string, Game>;
   ratings: Record<string, Pick<Rating, 'gameId' | 'score' | 'tier' | 'status' | 'finishedAt'>>;
-  lists: (Pick<GameList, 'id' | 'name' | 'emoji' | 'mode' | 'system' | 'gameIds'>)[];
 }
 
 export function fetchPublicProfile(username: string): Promise<PublicProfile> {
@@ -143,7 +142,8 @@ export function fetchPublicProfile(username: string): Promise<PublicProfile> {
 }
 
 /** The shareable link to someone's public profile in this app. */
-export const profileUrl = (username: string) => `${window.location.origin}${window.location.pathname}#/p/${encodeURIComponent(username)}`;
+export const profileUrl = (username: string, query = '') =>
+  `${window.location.origin}${window.location.pathname}#/p/${encodeURIComponent(username)}${query ? `?${query}` : ''}`;
 
 let running = false;
 let again = false;

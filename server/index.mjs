@@ -413,8 +413,8 @@ function imdbRating(tconst) {
 }
 
 // ---------- public profiles ----------
-// Opt-in, read-only view of someone's ratings and lists for a shareable link.
-// Notes, platforms, dates started and API keys never leave the server.
+// Opt-in, read-only view of someone's tier list (what they rated) for a shareable
+// link. Lists, notes, platforms, dates started and API keys never leave the server.
 
 async function setPublic(user, value) {
   if (typeof value !== 'boolean') throw new HttpError(400, 'Formato inválido');
@@ -441,17 +441,7 @@ async function publicProfile(name) {
     if (!r || typeof r.score !== 'number') continue;
     ratings[id] = { gameId: id, score: r.score, tier: str(r.tier, 20), status: str(r.status, 20), finishedAt: str(r.finishedAt, 10) };
   }
-  const lists = (Array.isArray(data.lists) ? data.lists : [])
-    .filter((l) => l && Array.isArray(l.gameIds) && l.gameIds.length)
-    .map((l) => ({
-      id: str(l.id, 60),
-      name: str(l.name, 80),
-      emoji: str(l.emoji, 40),
-      mode: l.mode === 'screen' ? 'screen' : l.mode === 'games' ? 'games' : undefined,
-      system: Boolean(l.system),
-      gameIds: l.gameIds.filter((g) => typeof g === 'string').slice(0, 500),
-    }));
-  const wanted = new Set([...Object.keys(ratings), ...lists.flatMap((l) => l.gameIds)]);
+  const wanted = new Set(Object.keys(ratings));
   const games = {};
   for (const id of wanted) {
     const g = data.games?.[id];
@@ -466,7 +456,7 @@ async function publicProfile(name) {
       platforms: [],
     };
   }
-  return { username: user.username, updatedAt: doc.updatedAt ?? null, games, ratings, lists };
+  return { username: user.username, updatedAt: doc.updatedAt ?? null, games, ratings };
 }
 
 // ---------- covers for share images ----------

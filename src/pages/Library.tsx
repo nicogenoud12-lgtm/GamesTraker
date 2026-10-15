@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { BookOpen, ChevronRight, Film, Layers, LayoutGrid, Rows3, Tv } from 'lucide-react';
+import { BookOpen, ChevronRight, LayoutGrid, Rows3, Share2 } from 'lucide-react';
+import { KINDS } from '../lib/kinds';
+import TierShareSheet from '../components/TierShareSheet';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreRing } from '../components/Score';
@@ -8,17 +10,10 @@ import { TIERS, TIER_BY_ID, type Tier } from '../lib/tiers';
 import type { Game, Rating, TierId } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
-import { MODES, kindOf, modeOf, type ScreenKind } from '../lib/mode';
+import { MODES, kindOf, modeOf } from '../lib/mode';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
-
-/** Series & movies collection can show both or just one kind (?tipo=pelis|series). */
-const KINDS: { id: string | null; kind: ScreenKind | null; label: string; icon: typeof Film }[] = [
-  { id: null, kind: null, label: 'Todo', icon: Layers },
-  { id: 'pelis', kind: 'movie', label: 'Películas', icon: Film },
-  { id: 'series', kind: 'tv', label: 'Series', icon: Tv },
-];
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'score', label: 'Puntaje' },
@@ -58,6 +53,7 @@ export default function Library() {
   const kindFilter = mode === 'screen' ? (KINDS.find((k) => k.id === params.get('tipo')) ?? KINDS[0]) : KINDS[0];
   const all = kindFilter.kind ? everything.filter((e) => kindOf(e.game.id) === kindFilter.kind) : everything;
   const byScore = (a: Entry, b: Entry) => b.rating.score - a.rating.score || b.rating.updatedAt - a.rating.updatedAt;
+  const [shareOpen, setShareOpen] = useState(false);
   const avg = all.length ? Math.round(all.reduce((n, e) => n + e.rating.score, 0) / all.length) : 0;
 
   return (
@@ -95,6 +91,13 @@ export default function Library() {
           )}
           {all.length > 0 && (
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShareOpen(true)}
+                aria-label="Compartir mi escala"
+                className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-muted transition hover:border-white/20 hover:text-white"
+              >
+                <Share2 size={16} /> Compartir
+              </button>
               <Link
                 to="/diario"
                 className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-muted transition hover:border-white/20 hover:text-white"
@@ -137,6 +140,13 @@ export default function Library() {
           )}
         </>
       )}
+      <TierShareSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        mode={mode}
+        kind={kindFilter.kind}
+        entries={all.map((e) => ({ game: e.game, score: e.rating.score, tier: e.rating.tier }))}
+      />
     </div>
   );
 }

@@ -50,9 +50,9 @@ export default function PublicProfileToggle({ username }: { username: string }) 
       <div className="flex items-center gap-3">
         <Globe size={18} className="shrink-0 text-accent" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Perfil público</p>
+          <p className="text-sm font-semibold">Link a tu escala</p>
           <p className="text-xs text-muted">
-            Un link de solo lectura con tus puntajes y listas. No muestra notas, plataformas ni tus claves.
+            Un link de solo lectura con lo que puntuaste, siempre actualizado. No muestra listas, notas ni plataformas. También lo compartís desde Mis juegos → Compartir.
           </p>
         </div>
         <button
