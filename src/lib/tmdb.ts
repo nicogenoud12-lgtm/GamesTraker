@@ -141,11 +141,19 @@ interface TmdbDetail extends TmdbItem {
   belongs_to_collection?: { id: number } | null;
   homepage?: string;
   imdb_id?: string | null;
+  last_episode_to_air?: { runtime?: number | null } | null;
   external_ids?: { imdb_id?: string | null };
   credits?: { crew?: { job: string; name: string }[]; cast?: { name: string }[] };
   videos?: { results: { site: string; type: string; key: string; official?: boolean }[] };
   images?: { backdrops: { file_path: string }[] };
   'watch/providers'?: { results?: Record<string, { flatrate?: { provider_name: string; logo_path: string }[] }> };
+}
+
+/** Minutes to watch all of it: the movie, or every episode of the series. */
+function hoursOf(d: TmdbDetail, kind: ScreenKind): number | null {
+  if (kind === 'movie') return d.runtime ? d.runtime / 60 : null;
+  const perEpisode = d.episode_run_time?.[0] || d.last_episode_to_air?.runtime || null;
+  return d.number_of_episodes && perEpisode ? (d.number_of_episodes * perEpisode) / 60 : null;
 }
 
 function duration(minutes: number): string {
@@ -196,6 +204,7 @@ export async function tmdbDetail(key: string, kind: ScreenKind, id: string): Pro
     providers,
     trailer: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
     collectionId: d.belongs_to_collection?.id ?? null,
+    hours: hoursOf(d, kind),
     // Movies have it at the top; series only under external_ids.
     imdbId: d.imdb_id || d.external_ids?.imdb_id || null,
   };

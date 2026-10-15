@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Cloud, CloudOff, Compass, Play, RefreshCw, Search, Settings } from 'lucide-react';
+import { ChevronRight, Cloud, CloudOff, Compass, Dices, Play, RefreshCw, Search, Settings } from 'lucide-react';
 import { useSync } from '../store/useSync';
 import LoginInvite from '../components/LoginInvite';
 import Aurora from '../components/reactbits/Aurora';
@@ -147,6 +147,13 @@ export default function Home() {
                 <span>Después:</span>
                 <span className="truncate text-white/80">{next.slice(1, 3).map((g) => g.name).join(', ')}</span>
                 {next.length > 3 && <span className="shrink-0">+{next.length - 3}</span>}
+                <Link
+                  to={`/listas/${copy.nextListId}?ruleta=1`}
+                  aria-label={mode === 'games' ? '¿Qué juego hago ahora?' : '¿Qué veo ahora?'}
+                  className="ml-auto shrink-0 rounded-full bg-white/10 p-1.5 text-accent"
+                >
+                  <Dices size={16} />
+                </Link>
               </div>
             )}
           </div>
@@ -411,6 +418,12 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
                   </li>
                 ))}
               </ol>
+              <Link
+                to={`/listas/${copy.nextListId}?ruleta=1`}
+                className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 py-2 text-sm font-semibold text-accent hover:border-accent/60"
+              >
+                <Dices size={16} /> {mode === 'games' ? '¿Qué juego hago ahora?' : '¿Qué veo ahora?'}
+              </Link>
             </div>
           )}
 

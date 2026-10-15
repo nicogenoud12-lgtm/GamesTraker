@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { uid } from '../lib/format';
+import { localDay, uid } from '../lib/format';
 import type { Game, GameList, Rating } from '../lib/types';
 
 import {
@@ -34,6 +34,8 @@ interface State {
   tmdbKeyUpdatedAt: number;
   /** Day each game was moved to "Jugando ahora" (YYYY-MM-DD), to prefill the start date. */
   starts: Record<string, string>;
+  /** When each start date was set (for syncing edits). */
+  startsAt: Record<string, number>;
   /** Local snapshots of every game the user has rated or listed. */
   games: Record<string, Game>;
   ratings: Record<string, Rating>;
@@ -44,6 +46,8 @@ interface State {
 
   setApiKey: (key: string) => void;
   setTmdbKey: (key: string) => void;
+  /** Changes the day a game/series was started (YYYY-MM-DD). */
+  setStart: (gameId: string, date: string) => void;
   rememberGame: (game: Game) => void;
   saveRating: (game: Game, rating: Omit<Rating, 'gameId' | 'createdAt' | 'updatedAt'>) => void;
   deleteRating: (gameId: string) => void;
@@ -76,6 +80,7 @@ export const useStore = create<State>()(
       tmdbKey: '',
       tmdbKeyUpdatedAt: 0,
       starts: {},
+      startsAt: {},
       games: {},
       ratings: {},
       lists: SYSTEM_LISTS,
@@ -84,6 +89,8 @@ export const useStore = create<State>()(
 
       setApiKey: (apiKey) => set({ apiKey, apiKeyUpdatedAt: Date.now() }),
       setTmdbKey: (tmdbKey) => set({ tmdbKey, tmdbKeyUpdatedAt: Date.now() }),
+      setStart: (gameId, date) =>
+        set((s) => ({ starts: { ...s.starts, [gameId]: date }, startsAt: { ...s.startsAt, [gameId]: Date.now() } })),
 
       rememberGame: (game) => set((s) => ({ games: { ...s.games, [game.id]: snapshot(game) } })),
 
@@ -134,10 +141,12 @@ export const useStore = create<State>()(
       addToList: (listId, game, position = 'bottom') =>
         set((s) => ({
           games: { ...s.games, [game.id]: snapshot(game) },
-          starts:
-            NOW_LISTS.has(listId) && !s.starts[game.id]
-              ? { ...s.starts, [game.id]: new Date().toISOString().slice(0, 10) }
-              : s.starts,
+          ...(NOW_LISTS.has(listId) && !s.starts[game.id]
+            ? {
+                starts: { ...s.starts, [game.id]: localDay() },
+                startsAt: { ...s.startsAt, [game.id]: Date.now() },
+              }
+            : {}),
           lists: s.lists.map((l) => {
             if (l.id !== listId || l.gameIds.includes(game.id)) return l;
             const gameIds = position === 'top' ? [game.id, ...l.gameIds] : [...l.gameIds, game.id];

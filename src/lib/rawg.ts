@@ -137,6 +137,7 @@ export async function rawgDetail(key: string, rawgId: string): Promise<GameDetai
     // The detail sometimes only has the per-platform metascores.
     ...score({ ...g, metacritic: g.metacritic || Math.max(0, ...(g.metacritic_platforms ?? []).map((p) => p.metascore)) || null }),
     playtime: g.playtime || null,
+    hours: g.playtime || null,
     website: g.website || null,
     screenshots: shots.results.map((s) => s.image),
     steamAppId: steam ?? null,
