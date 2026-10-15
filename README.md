@@ -83,6 +83,25 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 - Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
   borrado no vuelve a aparecer.
 
+### Nota de críticos (IGDB)
+
+RAWG no tiene la nota de Metacritic de muchos juegos. Para esos, la ficha muestra la nota de críticos de
+[IGDB](https://www.igdb.com) (promedio de reseñas de medios), que el servidor pide con una app de Twitch:
+
+1. Entrá a <https://dev.twitch.tv/console> con tu cuenta de Twitch (hace falta tener activada la verificación
+   en dos pasos) y tocá **Register Your Application**.
+2. Nombre: `GamesTraker`, OAuth Redirect URL: `http://localhost`, categoría: **Application Integration**,
+   tipo de cliente: **Confidential**.
+3. Abrí la app creada, copiá el **Client ID** y tocá **New Secret** para generar el **Client Secret**.
+4. Agregalos al `.env` del servidor y reiniciá con `docker compose up -d --build`:
+
+   ```bash
+   IGDB_CLIENT_ID=...
+   IGDB_CLIENT_SECRET=...
+   ```
+
+El secret queda solo en el servidor; la app le pregunta la nota a `/api/critics` (solo con sesión iniciada).
+
 Las keys de RAWG y TMDB (`VITE_RAWG_KEY`, `VITE_TMDB_KEY`) se meten en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
 volver a correr `docker compose up -d --build`.
 
