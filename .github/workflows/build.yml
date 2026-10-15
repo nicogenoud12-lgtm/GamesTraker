@@ -27,3 +27,6 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
             -d '{"username":"otro","password":"clave-de-prueba"}' localhost:8787/api/auth/register)" = 403
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer x.y' localhost:8787/api/state)" = 401
+          # La nota de críticos pide sesión, y sin credenciales de IGDB avisa que falta configurarla.
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'localhost:8787/api/critics?name=Hades')" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/critics?name=Hades')" = 503

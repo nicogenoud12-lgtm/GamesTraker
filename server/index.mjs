@@ -1,5 +1,6 @@
 // GamesTraker sync API: user accounts (username + password) and one JSON
-// document per user with their ratings, lists and game snapshots.
+// document per user with their ratings, lists and game snapshots, plus a
+// proxy to IGDB's critic scores (its API needs a secret and blocks browsers).
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -25,6 +26,8 @@ const KEEP_BACKUPS = 30;
 const SESSION_DAYS = 365;
 const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000;
+const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID ?? '';
+const IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET ?? '';
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -206,6 +209,77 @@ async function setPassword(username, password) {
   });
 }
 
+// ---------- critic scores (IGDB) ----------
+
+const igdbEnabled = () => Boolean(IGDB_CLIENT_ID && IGDB_CLIENT_SECRET);
+
+let twitchToken = null;
+async function igdbToken(refresh = false) {
+  if (!refresh && twitchToken && Date.now() < twitchToken.until) return twitchToken.value;
+  const qs = new URLSearchParams({ client_id: IGDB_CLIENT_ID, client_secret: IGDB_CLIENT_SECRET, grant_type: 'client_credentials' });
+  const res = await fetch(`https://id.twitch.tv/oauth2/token?${qs}`, { method: 'POST' });
+  if (!res.ok) throw new HttpError(502, 'Twitch rechazó IGDB_CLIENT_ID / IGDB_CLIENT_SECRET');
+  const json = await res.json();
+  twitchToken = { value: json.access_token, until: Date.now() + (json.expires_in - 3600) * 1000 };
+  return twitchToken.value;
+}
+
+async function igdbQuery(body, retry = true) {
+  const res = await fetch('https://api.igdb.com/v4/games', {
+    method: 'POST',
+    headers: { 'Client-ID': IGDB_CLIENT_ID, Authorization: `Bearer ${await igdbToken(!retry)}`, 'Content-Type': 'text/plain' },
+    body,
+  });
+  if (res.status === 401 && retry) return igdbQuery(body, false);
+  if (!res.ok) throw new HttpError(502, `Error de IGDB (${res.status})`);
+  return res.json();
+}
+
+// "FINAL FANTASY VII REMAKE INTERGRADE" and "Final Fantasy VII Remake: Intergrade" are the same game.
+const simplify = (s) =>
+  String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]/g, '');
+
+const yearOf = (unix) => (unix ? new Date(unix * 1000).getUTCFullYear() : null);
+
+/** Best IGDB match for a game name (and release year, to tell remakes apart). */
+function pickMatch(results, name, year) {
+  const want = simplify(name);
+  const near = (g) => !year || !yearOf(g.first_release_date) || Math.abs(yearOf(g.first_release_date) - year) <= 1;
+  const exact = results.filter((g) => simplify(g.name) === want);
+  return (
+    exact.find(near) ??
+    exact[0] ??
+    // Subtitles differ a lot between catalogs; only trust a partial match from the same year.
+    results.find((g) => near(g) && year && (simplify(g.name).startsWith(want) || want.startsWith(simplify(g.name))))
+  );
+}
+
+const CRITIC_TTL = 7 * 864e5;
+const critics = new Map();
+
+async function criticScore(name, year) {
+  const key = `${simplify(name)}|${year ?? ''}`;
+  const hit = critics.get(key);
+  if (hit && Date.now() - hit.at < CRITIC_TTL) return hit.value;
+  const q = String(name).replace(/["\\]/g, ' ').slice(0, 120);
+  const results = await igdbQuery(
+    `search "${q}"; fields name,first_release_date,aggregated_rating,aggregated_rating_count,url; limit 20;`,
+  );
+  const g = pickMatch(results, name, year);
+  const value =
+    g && g.aggregated_rating
+      ? { score: Math.round(g.aggregated_rating), reviews: g.aggregated_rating_count ?? null, name: g.name, url: g.url ?? null }
+      : { score: null };
+  if (critics.size > 5000) critics.clear();
+  critics.set(key, { at: Date.now(), value });
+  return value;
+}
+
 // ---------- http ----------
 
 function send(res, status, body) {
@@ -239,13 +313,19 @@ const validData = (d) =>
   d && typeof d === 'object' && typeof d.games === 'object' && typeof d.ratings === 'object' && Array.isArray(d.lists);
 
 async function handle(req, res) {
-  const { pathname } = new URL(req.url, 'http://localhost');
+  const url = new URL(req.url, 'http://localhost');
+  const { pathname } = url;
   const route = `${req.method} ${pathname}`;
 
   switch (route) {
     case 'GET /api/health': {
       const { users } = await loadUsers();
-      return send(res, 200, { ok: true, hasUsers: users.length > 0, signupOpen: users.length === 0 || ALLOW_SIGNUP });
+      return send(res, 200, {
+        ok: true,
+        hasUsers: users.length > 0,
+        signupOpen: users.length === 0 || ALLOW_SIGNUP,
+        critics: igdbEnabled(),
+      });
     }
     case 'POST /api/auth/register':
       return send(res, 200, await register(await readBody(req)));
@@ -280,6 +360,15 @@ async function handle(req, res) {
         return { status: 200, body: { version: next.version, updatedAt: next.updatedAt } };
       });
       return send(res, out.status, out.body);
+    }
+    case 'GET /api/critics': {
+      // Only for signed-in users, so the server's IGDB quota can't be used by strangers.
+      await authenticate(req);
+      if (!igdbEnabled()) throw new HttpError(503, 'Faltan IGDB_CLIENT_ID e IGDB_CLIENT_SECRET en el servidor');
+      const name = url.searchParams.get('name')?.trim();
+      if (!name) throw new HttpError(400, 'Falta el nombre del juego');
+      const year = Number(url.searchParams.get('year')) || null;
+      return send(res, 200, await criticScore(name, year));
     }
     default:
       return send(res, 404, { error: 'Not found' });

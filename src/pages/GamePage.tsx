@@ -7,6 +7,7 @@ import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
 import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/catalog';
+import { type CriticScore, criticScore } from '../lib/critics';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
@@ -83,6 +84,19 @@ export default function GamePage() {
     };
   }, [gameId, key]);
 
+  // RAWG lacks Metacritic for many games; ask IGDB's critics instead.
+  const [critic, setCritic] = useState<CriticScore | null>(null);
+  const needsCritic = mode === 'games' && detail != null && (detail.metacritic == null || detail.scoreLabel === 'RAWG');
+  useEffect(() => {
+    setCritic(null);
+    if (!needsCritic || !detail) return;
+    let alive = true;
+    criticScore(detail.name, detail.released).then((c) => alive && setCritic(c));
+    return () => {
+      alive = false;
+    };
+  }, [needsCritic, detail?.id]);
+
   const game: Game | null = detail ?? snapshot ?? null;
 
   if (!game) {
@@ -146,6 +160,17 @@ export default function GamePage() {
           {g}
         </span>
       ))}
+      {critic && (
+        <a
+          href={critic.url ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          title={critic.reviews ? `Promedio de ${critic.reviews} reseñas de medios (IGDB)` : 'Promedio de reseñas de medios (IGDB)'}
+          className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
+        >
+          Críticos {critic.score}
+        </a>
+      )}
       {detail?.metacritic != null && (
         <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
           {detail.scoreLabel === 'RAWG' ? 'Usuarios RAWG' : (detail.scoreLabel ?? 'Metacritic')} {detail.metacritic}

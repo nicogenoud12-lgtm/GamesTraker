@@ -18,6 +18,9 @@ services:
     environment:
       # Con "true" se pueden crear más cuentas además de la primera.
       - ALLOW_SIGNUP=${ALLOW_SIGNUP:-false}
+      # Nota de críticos de IGDB para los juegos sin Metacritic (app de https://dev.twitch.tv/console).
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID:-}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
     volumes:
       - gamestraker_data:/data
     restart: unless-stopped
