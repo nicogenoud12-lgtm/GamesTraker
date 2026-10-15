@@ -69,7 +69,8 @@ export function useHours(keys: Keys, ids: string[]): Record<string, number | nul
   return hours;
 }
 
-export function formatHours(h: number): string {
+/** An estimate, rounded: "45 min", "2,5 h", "38 h". */
+export function roughHours(h: number): string {
   if (h < 1) return `${Math.max(1, Math.round(h * 60))} min`;
   if (h < 10) return `${Math.round(h * 2) / 2} h`.replace('.', ',');
   return `${Math.round(h)} h`;

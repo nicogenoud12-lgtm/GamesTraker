@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Dices, Play } from 'lucide-react';
 import Cover from './Cover';
 import Sheet from './Sheet';
-import { formatHours } from '../lib/durations';
+import { roughHours } from '../lib/durations';
 import { kindOf, MODES, type Mode } from '../lib/mode';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
@@ -139,7 +139,7 @@ export default function Roulette({ open, onClose, mode, games, hours }: Props) {
               <Link to={`/juego/${encodeURIComponent(shown.id)}`} onClick={onClose} className="font-display text-xl font-bold">
                 {shown.name}
               </Link>
-              <p className="text-sm text-muted">{h != null ? `Te lleva unas ${formatHours(h)}` : 'Duración desconocida'}</p>
+              <p className="text-sm text-muted">{h != null ? `Te lleva unas ${roughHours(h)}` : 'Duración desconocida'}</p>
             </>
           ) : (
             <p className="pt-3 text-sm text-muted">

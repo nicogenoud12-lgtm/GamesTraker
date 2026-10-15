@@ -27,7 +27,7 @@ import Sheet from '../components/Sheet';
 import Roulette from '../components/Roulette';
 import StartDate from '../components/StartDate';
 import { useKeys } from '../lib/catalog';
-import { formatHours, useHours } from '../lib/durations';
+import { roughHours, useHours } from '../lib/durations';
 import { year } from '../lib/format';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
@@ -108,7 +108,7 @@ export default function ListDetail() {
             </h1>
             <p className="text-sm text-muted">
               {items.length} {items.length === 1 ? copy.item : copy.items}
-              {total > 0 && ` · ≈ ${formatHours(total)} en total`}
+              {total > 0 && ` · ≈ ${roughHours(total)} en total`}
               {items.length > 1 && ' · Mantené apretado y arrastrá para ordenar'}
             </p>
           </div>
@@ -252,7 +252,7 @@ function SortableItem({ game, index, ranked, started, score, hours, onRemove }: 
           </Link>
           {started !== undefined && <StartDate gameId={game.id} label="Fecha en que empezaste" compact />}
           <p className="truncate text-xs text-muted">
-            {[year(game.released), game.genres[0], hours ? `≈ ${formatHours(hours)}` : null].filter(Boolean).join(' · ')}
+            {[year(game.released), game.genres[0], hours ? `≈ ${roughHours(hours)}` : null].filter(Boolean).join(' · ')}
           </p>
         </div>
       </div>
