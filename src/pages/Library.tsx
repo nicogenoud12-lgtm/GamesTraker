@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronRight, LayoutGrid, Rows3 } from 'lucide-react';
+import { ChevronRight, Film, Layers, LayoutGrid, Rows3, Tv } from 'lucide-react';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreRing } from '../components/Score';
@@ -8,10 +8,17 @@ import { TIERS, TIER_BY_ID, type Tier } from '../lib/tiers';
 import type { Game, Rating, TierId } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
-import { MODES, modeOf } from '../lib/mode';
+import { MODES, kindOf, modeOf, type ScreenKind } from '../lib/mode';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
+
+/** Series & movies collection can show both or just one kind (?tipo=pelis|series). */
+const KINDS: { id: string | null; kind: ScreenKind | null; label: string; icon: typeof Film }[] = [
+  { id: null, kind: null, label: 'Todo', icon: Layers },
+  { id: 'pelis', kind: 'movie', label: 'Películas', icon: Film },
+  { id: 'series', kind: 'tv', label: 'Series', icon: Tv },
+];
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'score', label: 'Puntaje' },
@@ -45,20 +52,47 @@ export default function Library() {
 
   const mode = useMode();
   const copy = MODES[mode];
-  const all: Entry[] = Object.values(ratings)
+  const everything: Entry[] = Object.values(ratings)
     .filter((r) => games[r.gameId] && modeOf(r.gameId) === mode)
     .map((r) => ({ game: games[r.gameId], rating: r }));
+  const kindFilter = mode === 'screen' ? (KINDS.find((k) => k.id === params.get('tipo')) ?? KINDS[0]) : KINDS[0];
+  const all = kindFilter.kind ? everything.filter((e) => kindOf(e.game.id) === kindFilter.kind) : everything;
   const byScore = (a: Entry, b: Entry) => b.rating.score - a.rating.score || b.rating.updatedAt - a.rating.updatedAt;
   const avg = all.length ? Math.round(all.reduce((n, e) => n + e.rating.score, 0) / all.length) : 0;
 
   return (
     <div>
       <header className="pt-safe px-5">
-        <div className="flex items-end justify-between gap-3 pt-6 pb-4 lg:pt-10 lg:pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-3 pt-6 pb-4 lg:flex-nowrap lg:pt-10 lg:pb-6">
           <div>
             <p className="text-sm text-muted">Tu colección</p>
             <h1 className="font-display text-3xl font-bold tracking-tight lg:text-4xl">{copy.collection}</h1>
           </div>
+          {mode === 'screen' && everything.length > 0 && (
+            <div
+              role="tablist"
+              aria-label="Tipo"
+              className="order-last grid w-full grid-cols-3 rounded-2xl border border-white/10 bg-black/30 p-1 lg:order-none lg:mx-auto lg:w-[420px]"
+            >
+              {KINDS.map(({ id, kind, label, icon: Icon }) => {
+                const active = kindFilter.id === id;
+                const n = kind ? everything.filter((e) => kindOf(e.game.id) === kind).length : everything.length;
+                return (
+                  <button
+                    key={label}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => set({ tipo: id, tier: null })}
+                    className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition ${active ? 'bg-accent text-black shadow-lg' : 'text-muted hover:text-white'}`}
+                  >
+                    <Icon size={16} strokeWidth={2.4} />
+                    {label}
+                    <span className={`text-xs tabular-nums ${active ? 'text-black/60' : 'text-muted/70'}`}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {all.length > 0 && (
             <div className="flex rounded-full border border-line bg-surface p-1">
               <ViewButton active={view === 'escala'} label="Escala" onClick={() => set({ vista: null, tier: null })}>
@@ -72,7 +106,11 @@ export default function Library() {
         </div>
       </header>
 
-      {all.length === 0 ? (
+      {all.length === 0 && everything.length > 0 ? (
+        <p className="mx-5 rounded-3xl border border-line bg-surface p-6 text-center text-muted">
+          Todavía no puntuaste {kindFilter.kind === 'tv' ? 'ninguna serie' : 'ninguna película'}.
+        </p>
+      ) : all.length === 0 ? (
         <div className="mx-5 rounded-3xl border border-line bg-surface p-6 text-center">
           <p className="text-4xl">🕹️</p>
           <p className="mt-3 font-display text-lg font-bold">Todavía no puntuaste nada</p>
