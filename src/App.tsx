@@ -19,12 +19,15 @@ import Stats from './pages/Stats';
 import YearReview from './pages/YearReview';
 import Diary from './pages/Diary';
 import PublicProfile from './pages/PublicProfile';
+import Friends from './pages/Friends';
+import { startNotices } from './lib/social';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 import CoverTransition from './components/CoverTransition';
 
 export default function App() {
   useEffect(() => startSync(), []);
+  useEffect(() => startNotices(), []);
   const mode = useMode();
   useEffect(() => {
     document.documentElement.dataset.mode = mode;
@@ -65,6 +68,7 @@ export default function App() {
           <Route path="/estadisticas" element={<Stats />} />
           <Route path="/resumen" element={<YearReview />} />
           <Route path="/diario" element={<Diary />} />
+          <Route path="/amigos" element={<Friends />} />
           <Route path="/cuenta" element={<Account />} />
           <Route path="*" element={<Home />} />
         </Routes>

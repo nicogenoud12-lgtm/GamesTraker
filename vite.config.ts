@@ -33,6 +33,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Push notifications from friends (public/push-sw.js).
+        importScripts: ['push-sw.js'],
         navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [

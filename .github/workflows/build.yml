@@ -38,3 +38,11 @@ jobs:
           curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"public":true}' \
             localhost:8787/api/profile | grep -q '"public":true'
           curl -sf localhost:8787/api/public/ci-test | grep -q '"username":"ci-test"'
+          # Con el link de invitación se puede crear una cuenta aunque el registro esté cerrado, y quedan amigos.
+          CODE=$(curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/friends | jq -r .code)
+          AMIGO=$(curl -sf -H 'Content-Type: application/json' \
+            -d "{\"username\":\"ci-amigo\",\"password\":\"clave-de-prueba\",\"invite\":\"$CODE\"}" localhost:8787/api/auth/register | jq -r .token)
+          curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/friends | grep -q '"username":"ci-amigo"'
+          curl -sf -H "Authorization: Bearer $AMIGO" 'localhost:8787/api/friends/ratings?id=rawg:1' | grep -q '"ratings"'
+          curl -sf -H "Authorization: Bearer $AMIGO" localhost:8787/api/notifications | grep -q '"unread":0'
+          curl -sf localhost:8787/api/push/key | grep -q '"key"'

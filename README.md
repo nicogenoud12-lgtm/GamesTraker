@@ -97,6 +97,20 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 - Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
   borrado no vuelve a aparecer.
 
+### Amigos
+
+En **Amigos** (barra lateral, o el botón de personas en el inicio del celu) cada uno tiene un link de invitación.
+Quien lo abre se crea una cuenta, aunque el registro esté cerrado, o entra con la suya, y quedan como amigos.
+
+- **Puntajes:** los amigos ven lo que puntuó cada uno, en Amigos y en la ficha de cada título. Viene prendido y se
+  puede ocultar en Ajustes → Amigos. Las notas nunca se comparten.
+- **Avisos** ("juan le puso 94 a Hades"): vienen apagados. Cada uno los prende en Ajustes → Amigos.
+  - A los amigos les aparecen en Amigos, con el número en el ícono.
+  - Si prendieron "Notificaciones en este dispositivo", también les llegan como notificación del teléfono o la
+    compu. En iPhone, primero hay que agregar la app a la pantalla de inicio.
+- **Servidor:** las notificaciones usan Web Push con claves propias (`vapid.json` en el volumen de datos, se crean
+  solas). No hace falta ninguna cuenta externa.
+
 ### Puntaje de IMDb (series y pelis)
 
 IMDb no tiene una API gratis, pero publica todos los días un archivo con el puntaje y los votos de cada título

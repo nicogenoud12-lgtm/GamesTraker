@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Loader2, UserPlus } from 'lucide-react';
 import { checkServer, login, register } from '../lib/sync';
+import { inviteInfo } from '../lib/social';
 import { useSync } from '../store/useSync';
 import { useToast } from '../store/useToast';
 
@@ -17,6 +18,18 @@ export default function Account() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Arriving from a friend's invite link: signing up is allowed and makes you friends.
+  const [params] = useSearchParams();
+  const invite = params.get('invitacion');
+  const [inviter, setInviter] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!invite) return;
+    setMode('register');
+    inviteInfo(invite)
+      .then((r) => setInviter(r.username))
+      .catch((e: Error) => setError(e.message));
+  }, [invite]);
 
   useEffect(() => {
     void checkServer();
@@ -26,8 +39,8 @@ export default function Account() {
     if (server && !server.hasUsers) setMode('register');
   }, [server]);
   useEffect(() => {
-    if (loggedIn) navigate('/ajustes', { replace: true });
-  }, [loggedIn, navigate]);
+    if (loggedIn) navigate(invite ? `/amigos?agregar=${encodeURIComponent(invite)}` : '/ajustes', { replace: true });
+  }, [loggedIn, navigate, invite]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,7 +48,7 @@ export default function Account() {
     setError(null);
     try {
       if (mode === 'login') await login(username, password);
-      else await register(username, password);
+      else await register(username, password, inviter && invite ? invite : undefined);
       toast(mode === 'login' ? 'Sesión iniciada · sincronizando' : 'Cuenta creada · sincronizando');
     } catch (err) {
       setError((err as Error).message);
@@ -44,7 +57,7 @@ export default function Account() {
     }
   };
 
-  const canRegister = server?.signupOpen ?? false;
+  const canRegister = (server?.signupOpen ?? false) || Boolean(inviter);
 
   return (
     <div className="pt-safe px-5 lg:pt-10">
@@ -53,6 +66,15 @@ export default function Account() {
       </button>
 
       <div className="mx-auto mt-6 max-w-sm">
+        {inviter && (
+          <p className="mb-5 flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4 text-sm">
+            <UserPlus size={20} className="shrink-0 text-accent" />
+            <span>
+              <span className="font-semibold">{inviter}</span> te invitó. Creá tu cuenta (o entrá si ya tenés una) y van a
+              ver los puntajes del otro.
+            </span>
+          </p>
+        )}
         <h1 className="font-display text-3xl font-bold tracking-tight">
           {mode === 'login' ? 'Iniciar sesión' : 'Crear tu cuenta'}
         </h1>

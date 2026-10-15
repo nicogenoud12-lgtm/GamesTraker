@@ -14,6 +14,7 @@ import readline from 'node:readline';
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import { promisify } from 'node:util';
+import { generateVapidKeys, sendPush } from './webpush.mjs';
 
 const scrypt = promisify(scryptCb);
 
@@ -25,6 +26,9 @@ const SECRET_FILE = path.join(DATA_DIR, 'secret');
 const STATE_DIR = path.join(DATA_DIR, 'state');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const LEGACY_STATE = path.join(DATA_DIR, 'state.json');
+const ACTIVITY_DIR = path.join(DATA_DIR, 'activity');
+const PUSH_DIR = path.join(DATA_DIR, 'push');
+const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
 const MAX_BODY = 10 * 1024 * 1024;
 const KEEP_BACKUPS = 30;
 const SESSION_DAYS = 365;
@@ -171,9 +175,16 @@ async function register(body) {
   const { salt, hash } = await hashPassword(body.password);
   return serial(async () => {
     const db = await loadUsers();
-    if (db.users.length > 0 && !ALLOW_SIGNUP) throw new HttpError(403, 'El registro está cerrado: ya hay una cuenta creada');
+    // A friend's invite link opens signup even when it is closed, and makes them friends.
+    const inviter = body.invite ? db.users.find((u) => u.friendCode && u.friendCode === String(body.invite)) : null;
+    if (body.invite && !inviter) throw new HttpError(400, 'La invitación no es válida o ya se cambió. Pedí un link nuevo.');
+    if (db.users.length > 0 && !ALLOW_SIGNUP && !inviter) throw new HttpError(403, 'El registro está cerrado: ya hay una cuenta creada');
     if (db.users.some((u) => u.username === username)) throw new HttpError(409, 'Ese usuario ya existe');
     const user = { id: randomBytes(8).toString('hex'), username, salt, hash, pwVersion: 1, createdAt: new Date().toISOString() };
+    if (inviter) {
+      user.friends = [inviter.id];
+      inviter.friends = [...new Set([...(inviter.friends ?? []), user.id])];
+    }
     db.users.push(user);
     await writeJson(USERS_FILE, db);
     // The first account inherits data saved by the earlier shared-code version, if any.
@@ -430,10 +441,12 @@ async function setPublic(user, value) {
 
 const str = (v, max = 300) => (typeof v === 'string' ? v.slice(0, max) : null);
 
-async function publicProfile(name) {
+async function publicProfile(name, viewer = null) {
   const username = normalize(name);
   const user = (await loadUsers()).users.find((u) => u.username === username);
-  if (!user?.public) throw new HttpError(404, 'Este perfil no existe o no es público');
+  // Friends see each other's tier list unless they turned that off; anyone sees a public one.
+  const allowed = user && (user.public || viewer?.id === user.id || (areFriends(viewer, user) && sharesRatings(user)));
+  if (!allowed) throw new HttpError(404, 'Este perfil no existe o no es público');
   const doc = await readJson(stateFile(user.id), { updatedAt: null, data: null });
   const data = doc.data ?? { games: {}, ratings: {}, lists: [] };
   const ratings = {};
@@ -457,6 +470,256 @@ async function publicProfile(name) {
     };
   }
   return { username: user.username, updatedAt: doc.updatedAt ?? null, games, ratings };
+}
+
+// ---------- friends ----------
+// Friendship is mutual and starts from a personal invite link (friendCode). Friends see
+// each other's ratings unless they hide them (shareRatings, on by default). With
+// "announce" (off by default) friends also get a notification for each new rating.
+
+const SCREEN_ID = /^(tmdb|dscr):/;
+const TIER_EMOJI = { malo: '💀', aburrido: '😴', safa: '🤷', bueno: '👍', buenisimo: '🔥', historico: '👑' };
+const MAX_FRIENDS = 200;
+const FEED_SIZE = 80;
+const ACTIVITY_KEEP = 100;
+
+const sharesRatings = (u) => u.shareRatings !== false;
+const areFriends = (a, b) => Boolean(a && b && a.id !== b.id && (a.friends ?? []).includes(b.id) && (b.friends ?? []).includes(a.id));
+const newCode = () => randomBytes(9).toString('base64url');
+const safeCover = (c) => (typeof c === 'string' && c.startsWith('https://') ? c : null);
+const gameCard = (g, id) => ({ id, name: str(g?.name) ?? '?', cover: safeCover(g?.cover), released: str(g?.released, 10), genres: [], platforms: [] });
+
+async function readData(uid) {
+  return (await readJson(stateFile(uid), { data: null })).data ?? { games: {}, ratings: {} };
+}
+
+/** Runs `fn` on the stored copy of `user` (and the whole db) and saves it. */
+function updateUsers(fn) {
+  return serial(async () => {
+    const db = await loadUsers();
+    const out = await fn(db);
+    await writeJson(USERS_FILE, db);
+    return out;
+  });
+}
+
+async function friendsOf(user) {
+  const { users } = await loadUsers();
+  const me = users.find((u) => u.id === user.id) ?? user;
+  return users.filter((u) => areFriends(me, u));
+}
+
+function summary(data) {
+  const out = { games: { count: 0, sum: 0 }, screen: { count: 0, sum: 0 } };
+  for (const [id, r] of Object.entries(data.ratings ?? {})) {
+    if (typeof r?.score !== 'number' || !data.games?.[id]) continue;
+    const m = SCREEN_ID.test(id) ? out.screen : out.games;
+    m.count++;
+    m.sum += r.score;
+  }
+  const avg = (m) => ({ count: m.count, average: m.count ? Math.round(m.sum / m.count) : null });
+  return { games: avg(out.games), screen: avg(out.screen) };
+}
+
+async function friendsOverview(user) {
+  const code =
+    user.friendCode ??
+    (await updateUsers((db) => {
+      const me = db.users.find((u) => u.id === user.id);
+      me.friendCode ??= newCode();
+      return me.friendCode;
+    }));
+  const friends = await Promise.all(
+    (await friendsOf(user)).map(async (f) => ({
+      username: f.username,
+      shares: sharesRatings(f),
+      ...(sharesRatings(f) ? summary(await readData(f.id)) : {}),
+    })),
+  );
+  friends.sort((a, b) => a.username.localeCompare(b.username));
+  return { code, shareRatings: sharesRatings(user), announce: Boolean(user.announce), friends };
+}
+
+async function inviteInfo(code) {
+  const owner = (await loadUsers()).users.find((u) => u.friendCode && u.friendCode === code);
+  if (!owner) throw new HttpError(404, 'La invitación no es válida o ya se cambió. Pedí un link nuevo.');
+  return { username: owner.username };
+}
+
+function addFriend(user, code) {
+  return updateUsers((db) => {
+    const me = db.users.find((u) => u.id === user.id);
+    const owner = db.users.find((u) => u.friendCode && u.friendCode === String(code ?? ''));
+    if (!owner) throw new HttpError(404, 'La invitación no es válida o ya se cambió. Pedí un link nuevo.');
+    if (owner.id === me.id) throw new HttpError(400, 'Ese es tu propio link: mandáselo a tus amigos.');
+    if ((me.friends ?? []).length >= MAX_FRIENDS) throw new HttpError(400, 'Llegaste al máximo de amigos');
+    me.friends = [...new Set([...(me.friends ?? []), owner.id])];
+    owner.friends = [...new Set([...(owner.friends ?? []), me.id])];
+    return { username: owner.username };
+  });
+}
+
+function removeFriend(user, username) {
+  return updateUsers((db) => {
+    const me = db.users.find((u) => u.id === user.id);
+    const other = db.users.find((u) => u.username === normalize(username));
+    if (!other) return { ok: true };
+    me.friends = (me.friends ?? []).filter((id) => id !== other.id);
+    other.friends = (other.friends ?? []).filter((id) => id !== me.id);
+    return { ok: true };
+  });
+}
+
+function resetCode(user) {
+  return updateUsers((db) => {
+    const me = db.users.find((u) => u.id === user.id);
+    me.friendCode = newCode();
+    return { code: me.friendCode };
+  });
+}
+
+function socialSettings(user, body) {
+  return updateUsers((db) => {
+    const me = db.users.find((u) => u.id === user.id);
+    if (typeof body.shareRatings === 'boolean') me.shareRatings = body.shareRatings;
+    if (typeof body.announce === 'boolean') me.announce = body.announce;
+    return { shareRatings: sharesRatings(me), announce: Boolean(me.announce) };
+  });
+}
+
+/** What each friend gave one title. */
+async function friendRatings(user, gameId) {
+  if (!gameId) throw new HttpError(400, 'Falta el id');
+  const out = [];
+  for (const f of await friendsOf(user)) {
+    if (!sharesRatings(f)) continue;
+    const r = (await readData(f.id)).ratings?.[gameId];
+    if (typeof r?.score === 'number') out.push({ username: f.username, score: r.score, tier: str(r.tier, 20), status: str(r.status, 20) });
+  }
+  return { ratings: out.sort((a, b) => b.score - a.score) };
+}
+
+/** Friends' most recent ratings, newest first. */
+async function friendFeed(user) {
+  const items = [];
+  for (const f of await friendsOf(user)) {
+    if (!sharesRatings(f)) continue;
+    const data = await readData(f.id);
+    for (const [id, r] of Object.entries(data.ratings ?? {})) {
+      if (typeof r?.score !== 'number' || !data.games?.[id]) continue;
+      items.push({ username: f.username, game: gameCard(data.games[id], id), score: r.score, tier: str(r.tier, 20), at: Number(r.updatedAt) || 0 });
+    }
+  }
+  return { items: items.sort((a, b) => b.at - a.at).slice(0, FEED_SIZE) };
+}
+
+// ---------- notifications ----------
+
+let vapid = null;
+async function loadVapid() {
+  vapid = await readJson(VAPID_FILE, null);
+  if (!vapid) {
+    vapid = generateVapidKeys();
+    await writeFile(VAPID_FILE, JSON.stringify(vapid), { mode: 0o600 });
+  }
+}
+
+const activityFile = (uid) => path.join(ACTIVITY_DIR, `${uid}.json`);
+const pushFile = (uid) => path.join(PUSH_DIR, `${uid}.json`);
+const PUSH_HOSTS = /(^|\.)(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
+
+/** New or re-scored ratings between two saved copies (only recent edits, not old history arriving from a device). */
+function newRatings(before, after) {
+  if (!before) return [];
+  const since = Date.now() - 24 * 3600 * 1000;
+  const out = [];
+  for (const [id, r] of Object.entries(after.ratings ?? {})) {
+    const prev = before.ratings?.[id];
+    if (typeof r?.score !== 'number' || !after.games?.[id] || (prev && prev.score === r.score)) continue;
+    if ((Number(r.updatedAt) || 0) < since) continue;
+    out.push({ id: randomBytes(6).toString('hex'), game: gameCard(after.games[id], id), score: r.score, tier: str(r.tier, 20), at: Number(r.updatedAt) });
+  }
+  // A bulk import shouldn't flood friends.
+  return out.sort((a, b) => b.at - a.at).slice(0, 5);
+}
+
+async function announce(user, events) {
+  if (!events.length) return;
+  await serial(async () => {
+    const list = await readJson(activityFile(user.id), []);
+    await writeJson(activityFile(user.id), [...events, ...list].slice(0, ACTIVITY_KEEP));
+  });
+  for (const f of await friendsOf(user)) {
+    const subs = await readJson(pushFile(f.id), []);
+    if (!subs.length) continue;
+    const gone = new Set();
+    for (const sub of subs) {
+      for (const e of events) {
+        const brand = SCREEN_ID.test(e.game.id) ? 'MediaTracker' : 'GamesTracker';
+        const payload = {
+          title: brand,
+          body: `${user.username} le puso ${e.score} a ${e.game.name} ${TIER_EMOJI[e.tier] ?? ''}`.trim(),
+          url: `#/juego/${encodeURIComponent(e.game.id)}`,
+          tag: `${user.username}:${e.game.id}`,
+        };
+        const subject = /^https:\/\//.test(sub.origin ?? '') ? sub.origin : 'mailto:gamestracker@example.com';
+        if ((await sendPush(sub, payload, vapid, subject)) === 'gone') gone.add(sub.endpoint);
+      }
+    }
+    if (gone.size) {
+      await serial(async () => {
+        const now = await readJson(pushFile(f.id), []);
+        await writeJson(pushFile(f.id), now.filter((s) => !gone.has(s.endpoint)));
+      });
+    }
+  }
+}
+
+async function notifications(user) {
+  const items = [];
+  for (const f of await friendsOf(user)) {
+    if (!sharesRatings(f)) continue;
+    for (const e of await readJson(activityFile(f.id), [])) items.push({ ...e, username: f.username });
+  }
+  items.sort((a, b) => b.at - a.at);
+  const seen = Number(user.seenAt) || 0;
+  return { items: items.slice(0, 50), unread: items.filter((e) => e.at > seen).length };
+}
+
+function markSeen(user) {
+  return updateUsers((db) => {
+    db.users.find((u) => u.id === user.id).seenAt = Date.now();
+    return { ok: true };
+  });
+}
+
+async function subscribePush(user, body) {
+  const sub = body.subscription;
+  let host;
+  try {
+    host = new URL(sub?.endpoint).hostname;
+    if (new URL(sub.endpoint).protocol !== 'https:') throw new Error();
+  } catch {
+    throw new HttpError(400, 'Suscripción inválida');
+  }
+  // Only real push services: the server POSTs to this URL.
+  if (!PUSH_HOSTS.test(host) || typeof sub.keys?.p256dh !== 'string' || typeof sub.keys?.auth !== 'string') {
+    throw new HttpError(400, 'Suscripción inválida');
+  }
+  const entry = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, origin: str(body.origin, 200), addedAt: Date.now() };
+  await serial(async () => {
+    const subs = (await readJson(pushFile(user.id), [])).filter((s) => s.endpoint !== entry.endpoint);
+    await writeJson(pushFile(user.id), [entry, ...subs].slice(0, 10));
+  });
+  return { ok: true };
+}
+
+async function unsubscribePush(user, endpoint) {
+  await serial(async () => {
+    const subs = await readJson(pushFile(user.id), []);
+    await writeJson(pushFile(user.id), subs.filter((s) => s.endpoint !== endpoint));
+  });
+  return { ok: true };
 }
 
 // ---------- covers for share images ----------
@@ -529,7 +792,11 @@ async function handle(req, res) {
     } catch {
       throw new HttpError(404, 'Este perfil no existe o no es público');
     }
-    return send(res, 200, await publicProfile(name));
+    const viewer = await authenticate(req).catch(() => null);
+    return send(res, 200, await publicProfile(name, viewer));
+  }
+  if (req.method === 'GET' && pathname.startsWith('/api/invite/')) {
+    return send(res, 200, await inviteInfo(pathname.slice('/api/invite/'.length)));
   }
 
   switch (route) {
@@ -578,10 +845,37 @@ async function handle(req, res) {
         await backupOncePerDay(user.id, doc);
         const next = { version: doc.version + 1, updatedAt: new Date().toISOString(), data: body.data };
         await writeJson(stateFile(user.id), next);
-        return { status: 200, body: { version: next.version, updatedAt: next.updatedAt } };
+        return { status: 200, body: { version: next.version, updatedAt: next.updatedAt }, events: user.announce && sharesRatings(user) ? newRatings(doc.data, body.data) : [] };
       });
-      return send(res, out.status, out.body);
+      send(res, out.status, out.body);
+      // Friends hear about new ratings after the device already got its answer.
+      if (out.events?.length) announce(user, out.events).catch((e) => console.error('announce', e));
+      return;
     }
+    case 'GET /api/friends':
+      return send(res, 200, await friendsOverview(await authenticate(req)));
+    case 'POST /api/friends/add':
+      return send(res, 200, await addFriend(await authenticate(req), (await readBody(req)).code));
+    case 'POST /api/friends/remove':
+      return send(res, 200, await removeFriend(await authenticate(req), (await readBody(req)).username));
+    case 'POST /api/friends/code':
+      return send(res, 200, await resetCode(await authenticate(req)));
+    case 'POST /api/friends/settings':
+      return send(res, 200, await socialSettings(await authenticate(req), await readBody(req)));
+    case 'GET /api/friends/ratings':
+      return send(res, 200, await friendRatings(await authenticate(req), url.searchParams.get('id')));
+    case 'GET /api/friends/feed':
+      return send(res, 200, await friendFeed(await authenticate(req)));
+    case 'GET /api/notifications':
+      return send(res, 200, await notifications(await authenticate(req)));
+    case 'POST /api/notifications/seen':
+      return send(res, 200, await markSeen(await authenticate(req)));
+    case 'GET /api/push/key':
+      return send(res, 200, { key: vapid.publicKey });
+    case 'POST /api/push/subscribe':
+      return send(res, 200, await subscribePush(await authenticate(req), await readBody(req)));
+    case 'POST /api/push/unsubscribe':
+      return send(res, 200, await unsubscribePush(await authenticate(req), (await readBody(req)).endpoint));
     case 'GET /api/critics': {
       // Only for signed-in users, so the server's IGDB quota can't be used by strangers.
       await authenticate(req);
@@ -604,7 +898,10 @@ async function handle(req, res) {
 
 await mkdir(STATE_DIR, { recursive: true });
 await mkdir(BACKUP_DIR, { recursive: true });
+await mkdir(ACTIVITY_DIR, { recursive: true });
+await mkdir(PUSH_DIR, { recursive: true });
 await loadSecret();
+await loadVapid();
 
 if (process.argv[2] === 'reset-password') {
   const [, , , username, password] = process.argv;

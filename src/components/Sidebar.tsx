@@ -1,11 +1,13 @@
 import { Link, NavLink } from 'react-router-dom';
-import { BarChart3, BookOpen, Cloud, CloudOff, Compass, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
+import { BarChart3, BookOpen, Cloud, Users, CloudOff, Compass, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
 import ModeSwitch from './ModeSwitch';
 import { MODES } from '../lib/mode';
 import { useMode } from '../store/useUi';
 import Cover from './Cover';
 import { useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
+import { useNotices } from '../lib/social';
+import { Badge } from './FriendsButton';
 
 const NAV = [
   { to: '/', label: 'Inicio', icon: House, end: true },
@@ -23,8 +25,11 @@ export default function Sidebar() {
     const id = s.lists.find((l) => l.id === copy.nextListId)?.gameIds[0];
     return id ? s.games[id] : undefined;
   });
+  const loggedIn = useSync((s) => Boolean(s.token));
+  const unread = useNotices((s) => s.unread);
   const nav = [...NAV];
   nav.splice(4, 0, { to: '/mis-juegos', label: copy.collection, icon: copy.icon, end: false }, { to: '/diario', label: 'Diario', icon: BookOpen, end: false });
+  if (loggedIn) nav.push({ to: '/amigos', label: 'Amigos', icon: Users, end: false });
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0d0d13] px-4 py-6 lg:flex">
@@ -49,6 +54,7 @@ export default function Sidebar() {
               <>
                 <Icon size={19} className={isActive ? 'text-accent' : ''} strokeWidth={isActive ? 2.4 : 2} />
                 {label}
+                {to === '/amigos' && unread > 0 && <Badge n={unread} className="ml-auto" />}
               </>
             )}
           </NavLink>
