@@ -24,9 +24,9 @@ import Cover from '../components/Cover';
 import ListIcon, { LIST_ICONS, iconFor } from '../components/ListIcon';
 import { ScoreBadge } from '../components/Score';
 import Sheet from '../components/Sheet';
-import { year } from '../lib/format';
+import { formatDate, playingDay, year } from '../lib/format';
 import type { Game } from '../lib/types';
-import { NEXT_LIST_ID, useStore } from '../store/useStore';
+import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
 
 export default function ListDetail() {
   const { id = '' } = useParams();
@@ -34,6 +34,7 @@ export default function ListDetail() {
   const list = useStore((s) => s.lists.find((l) => l.id === id));
   const games = useStore((s) => s.games);
   const ratings = useStore((s) => s.ratings);
+  const starts = useStore((s) => s.starts);
   const reorderList = useStore((s) => s.reorderList);
   const removeFromList = useStore((s) => s.removeFromList);
   const updateList = useStore((s) => s.updateList);
@@ -120,6 +121,7 @@ export default function ListDetail() {
                     game={g}
                     index={i}
                     ranked={ranked}
+                    started={list.id === PLAYING_LIST_ID ? starts[g.id] : undefined}
                     score={ratings[g.id]?.score}
                     onRemove={() => removeFromList(list.id, g.id)}
                   />
@@ -186,11 +188,13 @@ interface ItemProps {
   game: Game;
   index: number;
   ranked: boolean;
+  /** Start date, shown for games in "Jugando ahora". */
+  started?: string;
   score: number | undefined;
   onRemove: () => void;
 }
 
-function SortableItem({ game, index, ranked, score, onRemove }: ItemProps) {
+function SortableItem({ game, index, ranked, started, score, onRemove }: ItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: game.id });
   const first = ranked && index === 0;
 
@@ -210,6 +214,11 @@ function SortableItem({ game, index, ranked, score, onRemove }: ItemProps) {
         <div className="min-w-0">
           {first && <p className="text-[10px] font-bold tracking-widest text-accent uppercase">Siguiente</p>}
           <p className="truncate font-semibold">{game.name}</p>
+          {started && (
+            <p className="truncate text-xs text-emerald-300">
+              {playingDay(started)} · desde {formatDate(started)}
+            </p>
+          )}
           <p className="truncate text-xs text-muted">{[year(game.released), game.genres[0]].filter(Boolean).join(' · ')}</p>
         </div>
       </Link>

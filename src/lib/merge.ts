@@ -7,6 +7,10 @@ export interface SyncData {
   lists: GameList[];
   ratingTombs: Record<string, number>;
   listTombs: Record<string, number>;
+  /** Start dates per game; missing in documents saved by older versions. */
+  starts?: Record<string, string>;
+  /** RAWG key shared across devices; the most recently changed one wins. */
+  settings?: { apiKey: string; updatedAt: number };
 }
 
 function newestTombs(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
@@ -41,7 +45,19 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
     .filter((l) => l.system || (listTombs[l.id] ?? -1) < l.updatedAt)
     .sort((x, y) => x.createdAt - y.createdAt);
 
-  return { games: { ...b.games, ...a.games }, ratings, lists, ratingTombs, listTombs };
+  const sa = a.settings ?? { apiKey: '', updatedAt: 0 };
+  const sb = b.settings ?? { apiKey: '', updatedAt: 0 };
+  const settings = sb.updatedAt > sa.updatedAt ? sb : sa;
+
+  return {
+    games: { ...b.games, ...a.games },
+    ratings,
+    lists,
+    ratingTombs,
+    listTombs,
+    starts: { ...(b.starts ?? {}), ...(a.starts ?? {}) },
+    settings,
+  };
 }
 
 /** JSON with sorted keys, so equal data always serialises the same way. */

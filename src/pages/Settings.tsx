@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, LogIn, RefreshCw, Upload } from 'lucide-react';
 import { changePassword, syncNow } from '../lib/sync';
@@ -15,6 +15,9 @@ export default function Settings() {
   const importData = useStore((s) => s.importData);
   const toast = useToast((s) => s.show);
   const [draft, setDraft] = useState(apiKey);
+  const loggedIn = useSync((s) => Boolean(s.token));
+  // A key that arrives from another device fills the field too.
+  useEffect(() => setDraft((d) => d || apiKey), [apiKey]);
   const [testing, setTesting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -109,6 +112,11 @@ export default function Settings() {
               <CheckCircle2 size={16} /> Conectado
             </p>
           )}
+          <p className="mt-2 text-xs text-muted">
+            {loggedIn
+              ? 'Se guarda en tu cuenta: llega sola a los otros dispositivos donde inicies sesión.'
+              : 'Iniciá sesión para que la key llegue sola a tus otros dispositivos.'}
+          </p>
         </section>
 
         <section className="rounded-3xl border border-line bg-surface p-5">

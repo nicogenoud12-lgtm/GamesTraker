@@ -10,7 +10,7 @@ import { gameDetail, effectiveKey, seriesGames } from '../lib/catalog';
 import GameRail from '../components/GameRail';
 import { useIsDesktop } from '../lib/useMedia';
 import { resizeImage } from '../lib/rawg';
-import { formatDate, year } from '../lib/format';
+import { daysBetween, formatDate, formatHours, year } from '../lib/format';
 import { STATUSES } from '../lib/tiers';
 import type { Game, GameDetail } from '../lib/types';
 import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
@@ -89,6 +89,7 @@ export default function GamePage() {
   };
 
   const meta = [year(game.released), detail?.developers[0]].filter(Boolean).join(' · ');
+  const took = rating?.startedAt && rating.finishedAt ? daysBetween(rating.startedAt, rating.finishedAt) : null;
   const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
   const coverSize = isDesktop ? { w: 300, h: 400 } : { w: 200, h: 266 };
 
@@ -140,10 +141,25 @@ export default function GamePage() {
           <TierChip tier={rating.tier} />
         </div>
         <p className="mt-1.5 truncate text-xs text-muted">
-          {[STATUSES.find((s) => s.id === rating.status)?.label, rating.platform, formatDate(rating.finishedAt)]
+          {[
+            STATUSES.find((s) => s.id === rating.status)?.label,
+            rating.platform,
+            rating.hours != null ? formatHours(rating.hours) : null,
+            formatDate(rating.finishedAt),
+          ]
             .filter(Boolean)
             .join(' · ')}
         </p>
+        {(took != null || rating.replay) && (
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {[
+              took != null && took >= 0 ? `Le dedicaste ${took === 0 ? 'un día' : `${took + 1} días`}` : null,
+              rating.replay ? REPLAY_LABEL[rating.replay] : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
       </div>
       <Pencil size={18} className="text-muted" />
     </button>
@@ -235,7 +251,7 @@ export default function GamePage() {
 
   const sheets = (
     <>
-      <RatingSheet game={game} open={rateOpen} onClose={() => setRateOpen(false)} />
+      <RatingSheet game={game} open={rateOpen} onClose={() => setRateOpen(false)} avgHours={detail?.playtime} />
       <ListPickerSheet game={game} open={listOpen} onClose={() => setListOpen(false)} />
     </>
   );
@@ -324,6 +340,8 @@ export default function GamePage() {
     </div>
   );
 }
+
+const REPLAY_LABEL = { si: 'Lo volvería a jugar', quizas: 'Quizás lo vuelva a jugar', no: 'No lo volvería a jugar' } as const;
 
 function Info({ label, value }: { label: string; value: string }) {
   return (

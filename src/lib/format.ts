@@ -34,3 +34,20 @@ export function formatDate(iso: string | null): string {
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
+
+/** Whole days from one YYYY-MM-DD date to another (negative if `to` is earlier). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 864e5);
+}
+
+export function formatHours(h: number): string {
+  return `${String(h).replace('.', ',')} h`;
+}
+
+/** "Día 5" for a game started on `start` (YYYY-MM-DD), counting today. */
+export function playingDay(start: string | undefined): string | null {
+  if (!start) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const n = daysBetween(start, today) + 1;
+  return n >= 1 ? `Día ${n}` : null;
+}

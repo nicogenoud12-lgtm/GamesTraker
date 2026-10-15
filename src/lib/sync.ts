@@ -8,7 +8,7 @@ interface RemoteDoc {
   data: SyncData | null;
 }
 
-const EMPTY: SyncData = { games: {}, ratings: {}, lists: [], ratingTombs: {}, listTombs: {} };
+const EMPTY: SyncData = { games: {}, ratings: {}, lists: [], ratingTombs: {}, listTombs: {}, starts: {} };
 const PUSH_DELAY_MS = 1500;
 const POLL_MS = 60_000;
 
@@ -22,8 +22,18 @@ export class ApiError extends Error {
 }
 
 function pick(): SyncData {
-  const { games, ratings, lists, ratingTombs, listTombs } = useStore.getState();
-  return { games, ratings, lists, ratingTombs, listTombs };
+  const { games, ratings, lists, ratingTombs, listTombs, starts, apiKey, apiKeyUpdatedAt } = useStore.getState();
+  return { games, ratings, lists, ratingTombs, listTombs, starts, settings: { apiKey, updatedAt: apiKeyUpdatedAt } };
+}
+
+/** Writes merged data back into the store (settings live in separate store fields). */
+function apply(data: SyncData) {
+  const { settings, ...rest } = data;
+  useStore.setState({
+    ...rest,
+    starts: rest.starts ?? {},
+    ...(settings ? { apiKey: settings.apiKey, apiKeyUpdatedAt: settings.updatedAt } : {}),
+  });
 }
 
 async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, token = useSync.getState().token): Promise<T> {
@@ -106,7 +116,7 @@ export async function syncNow(): Promise<void> {
 
       if (stableStringify(merged) !== stableStringify(local)) {
         applyingRemote = true;
-        useStore.setState(merged);
+        apply(merged);
         applyingRemote = false;
       }
       if (remote.data && stableStringify(merged) === stableStringify(remoteData)) break;
@@ -136,7 +146,15 @@ export function startSync(): () => void {
   };
   const unsubStore = useStore.subscribe((s, prev) => {
     if (applyingRemote || !useSync.getState().token) return;
-    if (s.ratings !== prev.ratings || s.lists !== prev.lists || s.games !== prev.games) schedule();
+    if (
+      s.ratings !== prev.ratings ||
+      s.lists !== prev.lists ||
+      s.games !== prev.games ||
+      s.starts !== prev.starts ||
+      s.apiKey !== prev.apiKey
+    ) {
+      schedule();
+    }
   });
   const unsubToken = useSync.subscribe((s, prev) => {
     if (s.token && s.token !== prev.token && s.username !== prev.username) void syncNow();

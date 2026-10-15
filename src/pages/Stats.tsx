@@ -5,7 +5,7 @@ import { ColumnChart, RankBars } from '../components/Charts';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
-import { shortPlatforms } from '../lib/format';
+import { daysBetween, formatHours, shortPlatforms } from '../lib/format';
 import { TIERS } from '../lib/tiers';
 import type { Game, Rating } from '../lib/types';
 import { useStore } from '../store/useStore';
@@ -69,6 +69,16 @@ export default function Stats() {
   const dropped = entries.length - finished.length;
   const best = entries.slice().sort((a, b) => b.rating.score - a.rating.score)[0];
   const tierCounts = TIERS.map((t) => ({ tier: t, n: entries.filter((e) => e.rating.tier === t.id).length }));
+  const timed = entries.filter((e) => e.rating.hours != null && e.rating.hours > 0);
+  const totalHours = timed.reduce((n, e) => n + (e.rating.hours ?? 0), 0);
+  const longest = timed.slice().sort((a, b) => (b.rating.hours ?? 0) - (a.rating.hours ?? 0))[0];
+  const fastest = finished
+    .filter((e) => e.rating.startedAt && e.rating.finishedAt)
+    .map((e) => ({ e, days: daysBetween(e.rating.startedAt!, e.rating.finishedAt!) + 1 }))
+    .filter((x) => x.days >= 1)
+    .sort((a, b) => a.days - b.days)[0];
+  const replayYes = entries.filter((e) => e.rating.replay === 'si').length;
+  const replayAnswered = entries.filter((e) => e.rating.replay).length;
   const platforms = topCounts(entries.map((e) => e.rating.platform).filter((p): p is string => Boolean(p)).map((p) => shortPlatforms([p], 1)));
   const genres = topCounts(entries.flatMap((e) => e.game.genres));
 
@@ -87,9 +97,10 @@ export default function Stats() {
         ))}
       </ScrollRow>
 
-      <div className="grid grid-cols-3 gap-2 px-5 lg:gap-4">
+      <div className="grid grid-cols-2 gap-2 px-5 sm:grid-cols-4 lg:gap-4">
         <Tile label={finished.length === 1 ? 'Terminado' : 'Terminados'} value={finished.length} />
         <Tile label="Promedio" value={average(entries)} />
+        <Tile label="Horas jugadas" value={Math.round(totalHours)} />
         <Tile label="Históricos" value={entries.filter((e) => e.rating.tier === 'historico').length} />
       </div>
       {dropped > 0 && (
@@ -167,6 +178,58 @@ export default function Stats() {
               </div>
             </div>
           </Link>
+        </Card>
+      )}
+
+      {(timed.length > 0 || fastest || replayAnswered > 0) && (
+        <Card title="Tiempo de juego">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            {timed.length > 0 && (
+              <>
+                <div>
+                  <dt className="text-xs text-muted">Total</dt>
+                  <dd className="font-display text-xl font-bold tabular-nums">{formatHours(Math.round(totalHours * 10) / 10)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Promedio por juego</dt>
+                  <dd className="font-display text-xl font-bold tabular-nums">
+                    {formatHours(Math.round((totalHours / timed.length) * 10) / 10)}
+                  </dd>
+                </div>
+              </>
+            )}
+            {longest && (
+              <div className="col-span-2">
+                <dt className="text-xs text-muted">El más largo</dt>
+                <dd className="truncate">
+                  <Link to={`/juego/${encodeURIComponent(longest.game.id)}`} className="font-semibold hover:underline">
+                    {longest.game.name}
+                  </Link>{' '}
+                  <span className="text-muted">· {formatHours(longest.rating.hours!)}</span>
+                </dd>
+              </div>
+            )}
+            {fastest && (
+              <div className="col-span-2">
+                <dt className="text-xs text-muted">El que terminaste más rápido</dt>
+                <dd className="truncate">
+                  <Link to={`/juego/${encodeURIComponent(fastest.e.game.id)}`} className="font-semibold hover:underline">
+                    {fastest.e.game.name}
+                  </Link>{' '}
+                  <span className="text-muted">· {fastest.days === 1 ? 'en un día' : `en ${fastest.days} días`}</span>
+                </dd>
+              </div>
+            )}
+            {replayAnswered > 0 && (
+              <div className="col-span-2">
+                <dt className="text-xs text-muted">Los volverías a jugar</dt>
+                <dd>
+                  <span className="font-semibold tabular-nums">{replayYes}</span>
+                  <span className="text-muted"> de {replayAnswered} que respondiste</span>
+                </dd>
+              </div>
+            )}
+          </dl>
         </Card>
       )}
 
