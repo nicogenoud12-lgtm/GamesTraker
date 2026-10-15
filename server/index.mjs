@@ -1,6 +1,7 @@
 // GamesTraker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
-// proxy to IGDB's critic scores (its API needs a secret and blocks browsers).
+// critic-score lookup (Steam's Metacritic, optionally IGDB) that browsers
+// can't do themselves.
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -262,21 +263,85 @@ function pickMatch(results, name, year) {
 const CRITIC_TTL = 7 * 864e5;
 const critics = new Map();
 
-async function criticScore(name, year) {
-  const key = `${simplify(name)}|${year ?? ''}`;
-  const hit = critics.get(key);
-  if (hit && Date.now() - hit.at < CRITIC_TTL) return hit.value;
+async function igdbScore(name, year) {
   const q = String(name).replace(/["\\]/g, ' ').slice(0, 120);
   const results = await igdbQuery(
     `search "${q}"; fields name,first_release_date,aggregated_rating,aggregated_rating_count,url; limit 20;`,
   );
   const g = pickMatch(results, name, year);
-  const value =
-    g && g.aggregated_rating
-      ? { score: Math.round(g.aggregated_rating), reviews: g.aggregated_rating_count ?? null, name: g.name, url: g.url ?? null }
-      : { score: null };
-  if (critics.size > 5000) critics.clear();
-  critics.set(key, { at: Date.now(), value });
+  return g?.aggregated_rating
+    ? { score: Math.round(g.aggregated_rating), source: 'igdb', reviews: g.aggregated_rating_count ?? null, url: g.url ?? null }
+    : null;
+}
+
+// Steam's store shows the (PC) Metacritic score and its users' reviews, and needs
+// no account. The app id comes from RAWG's store links; without it, an exact
+// name match in Steam's search.
+async function steamJson(url) {
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  if (!res.ok) throw new HttpError(502, `Error de Steam (${res.status})`);
+  return res.json();
+}
+
+async function steamAppId(name, appId) {
+  if (appId) return appId;
+  const qs = new URLSearchParams({ term: String(name).slice(0, 120), l: 'english', cc: 'US' });
+  const { items = [] } = await steamJson(`https://store.steampowered.com/api/storesearch/?${qs}`);
+  const match = items.find((i) => simplify(i.name) === simplify(name));
+  return match ? String(match.id) : null;
+}
+
+async function steamMetacritic(id) {
+  const details = await steamJson(`https://store.steampowered.com/api/appdetails?appids=${id}`);
+  const mc = details?.[id]?.data?.metacritic;
+  return mc?.score ? { score: mc.score, source: 'metacritic', reviews: null, url: mc.url ?? null } : null;
+}
+
+/**
+ * Steam users' reviews, as SteamDB rates them: the positive share pulled
+ * towards 50% when there are few reviews, so 10/10 doesn't beat 9,500/10,000.
+ */
+async function steamReviews(id) {
+  const qs = new URLSearchParams({ json: '1', language: 'all', purchase_type: 'all', num_per_page: '0', l: 'spanish' });
+  const { query_summary: q } = await steamJson(`https://store.steampowered.com/appreviews/${id}?${qs}`);
+  const total = (q?.total_positive ?? 0) + (q?.total_negative ?? 0);
+  if (total < 10) return null;
+  const share = q.total_positive / total;
+  const rating = share - (share - 0.5) * 2 ** -Math.log10(total + 1);
+  return {
+    rating: Math.round(rating * 100),
+    positive: Math.round(share * 100),
+    total,
+    label: q.review_score_desc ?? null,
+    url: `https://steamdb.info/app/${id}/`,
+  };
+}
+
+const CRITIC_MISS_TTL = 864e5;
+
+async function criticScore(name, year, steamId) {
+  const key = `${simplify(name)}|${year ?? ''}|${steamId ?? ''}`;
+  const hit = critics.get(key);
+  const found = (v) => v.score != null || v.steam != null;
+  if (hit && Date.now() - hit.at < (found(hit.value) ? CRITIC_TTL : CRITIC_MISS_TTL)) return hit.value;
+  let failed = false;
+  const attempt = (fn) =>
+    fn().catch((e) => {
+      console.error(`critics: ${e.message}`);
+      failed = true;
+      return null;
+    });
+  const id = await attempt(() => steamAppId(name, steamId));
+  const [metacritic, steam] = id
+    ? await Promise.all([attempt(() => steamMetacritic(id)), attempt(() => steamReviews(id))])
+    : [null, null];
+  const critic = metacritic ?? (igdbEnabled() ? await attempt(() => igdbScore(name, year)) : null);
+  const value = { ...(critic ?? { score: null }), steam };
+  // A source that was down shouldn't hide the score for a whole day.
+  if (found(value) || !failed) {
+    if (critics.size > 5000) critics.clear();
+    critics.set(key, { at: Date.now(), value });
+  }
   return value;
 }
 
@@ -324,7 +389,7 @@ async function handle(req, res) {
         ok: true,
         hasUsers: users.length > 0,
         signupOpen: users.length === 0 || ALLOW_SIGNUP,
-        critics: igdbEnabled(),
+        igdb: igdbEnabled(),
       });
     }
     case 'POST /api/auth/register':
@@ -364,11 +429,11 @@ async function handle(req, res) {
     case 'GET /api/critics': {
       // Only for signed-in users, so the server's IGDB quota can't be used by strangers.
       await authenticate(req);
-      if (!igdbEnabled()) throw new HttpError(503, 'Faltan IGDB_CLIENT_ID e IGDB_CLIENT_SECRET en el servidor');
       const name = url.searchParams.get('name')?.trim();
       if (!name) throw new HttpError(400, 'Falta el nombre del juego');
       const year = Number(url.searchParams.get('year')) || null;
-      return send(res, 200, await criticScore(name, year));
+      const steam = url.searchParams.get('steam');
+      return send(res, 200, await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null));
     }
     default:
       return send(res, 404, { error: 'Not found' });

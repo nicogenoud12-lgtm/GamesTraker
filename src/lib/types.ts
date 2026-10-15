@@ -39,6 +39,8 @@ export interface GameDetail extends Game {
   /** TMDB collection id, used for the "same saga" row of movies. */
   collectionId?: number | null;
   tagline?: string;
+  /** Steam app id, to look up the Metacritic score Steam shows. */
+  steamAppId?: string | null;
 }
 
 export interface Rating {
