@@ -5,6 +5,7 @@ import LoginInvite from '../components/LoginInvite';
 import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
+import YearLink from '../components/YearLink';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { TIERS } from '../lib/tiers';
@@ -181,6 +182,10 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <div className="mt-4 px-5">
+        <YearLink />
+      </div>
 
       {rated.length > 0 && (
         <section className="mt-7">
@@ -426,6 +431,8 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
               </Link>
             </div>
           )}
+
+          <YearLink />
 
           <Link
             to="/descubrir"

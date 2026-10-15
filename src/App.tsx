@@ -15,6 +15,7 @@ import Settings from './pages/Settings';
 import Discover from './pages/Discover';
 import Explore from './pages/Explore';
 import Stats from './pages/Stats';
+import YearReview from './pages/YearReview';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/mis-juegos" element={<Library />} />
           <Route path="/ajustes" element={<Settings />} />
           <Route path="/estadisticas" element={<Stats />} />
+          <Route path="/resumen" element={<YearReview />} />
           <Route path="/cuenta" element={<Account />} />
           <Route path="*" element={<Home />} />
         </Routes>

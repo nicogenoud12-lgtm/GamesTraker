@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { ColumnChart, RankBars } from '../components/Charts';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
+import YearLink from '../components/YearLink';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { daysBetween, formatHours, shortPlatforms } from '../lib/format';
 import { TIERS } from '../lib/tiers';
@@ -11,8 +12,7 @@ import type { Game, Rating } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
 import { kindOf, modeOf } from '../lib/mode';
-
-const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+import { MONTHS, topCounts, whenRated } from '../lib/stats';
 
 interface Entry {
   game: Game;
@@ -22,22 +22,7 @@ interface Entry {
   month: number;
 }
 
-function when(r: Rating): { year: number; month: number } {
-  if (r.finishedAt) return { year: Number(r.finishedAt.slice(0, 4)), month: Number(r.finishedAt.slice(5, 7)) - 1 };
-  const d = new Date(r.createdAt);
-  return { year: d.getFullYear(), month: d.getMonth() };
-}
-
 const average = (xs: Entry[]) => (xs.length ? Math.round(xs.reduce((n, e) => n + e.rating.score, 0) / xs.length) : 0);
-
-function topCounts(values: string[], limit = 6): { label: string; value: number }[] {
-  const counts = new Map<string, number>();
-  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([label, value]) => ({ label, value }));
-}
 
 export default function Stats() {
   const navigate = useNavigate();
@@ -50,7 +35,7 @@ export default function Stats() {
     () =>
       Object.values(ratings)
         .filter((r) => games[r.gameId] && modeOf(r.gameId) === mode)
-        .map((r) => ({ game: games[r.gameId], rating: r, ...when(r) })),
+        .map((r) => ({ game: games[r.gameId], rating: r, ...whenRated(r) })),
     [games, ratings, mode],
   );
   const years = [...new Set(all.map((e) => e.year))].sort((a, b) => b - a);
@@ -99,6 +84,10 @@ export default function Stats() {
           </YearChip>
         ))}
       </ScrollRow>
+
+      <div className="mb-4 px-5 lg:max-w-md">
+        <YearLink />
+      </div>
 
       <div className="grid grid-cols-2 gap-2 px-5 sm:grid-cols-4 lg:gap-4">
         <Tile
