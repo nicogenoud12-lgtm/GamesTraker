@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Props {
   className?: string;
+  /** Classes for the outer box, e.g. `min-w-0 flex-1` when the row sits inside a flex container. */
+  wrapperClassName?: string;
   children: ReactNode;
 }
 
@@ -10,7 +12,7 @@ interface Props {
  * Horizontal scroller that also works with a mouse: the wheel scrolls it
  * sideways, it can be dragged, and on hover devices it shows arrow buttons.
  */
-export default function ScrollRow({ className = '', children }: Props) {
+export default function ScrollRow({ className = '', wrapperClassName = '', children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
 
@@ -87,7 +89,7 @@ export default function ScrollRow({ className = '', children }: Props) {
   };
 
   return (
-    <div className="group/row relative">
+    <div className={`group/row relative ${wrapperClassName}`}>
       <div ref={ref} className={`no-scrollbar overflow-x-auto ${className}`}>
         {children}
       </div>
