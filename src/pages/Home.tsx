@@ -3,6 +3,7 @@ import { ChevronRight, Compass, Play, Search, Settings } from 'lucide-react';
 import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
+import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { TIERS } from '../lib/tiers';
 import { year } from '../lib/format';
@@ -77,14 +78,14 @@ export default function Home() {
       {playing.length > 0 && (
         <section className="mt-7">
           <SectionTitle title="Jugando ahora" to={`/listas/${PLAYING_LIST_ID}`} />
-          <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1">
+          <ScrollRow className="flex gap-3 px-5 pb-1">
             {playing.map((g) => (
               <Link key={g.id} to={`/juego/${encodeURIComponent(g.id)}`} className="w-28 shrink-0">
                 <Cover game={g} className="aspect-[3/4] rounded-2xl text-sm" />
                 <p className="mt-1.5 truncate text-sm font-medium">{g.name}</p>
               </Link>
             ))}
-          </div>
+          </ScrollRow>
         </section>
       )}
 

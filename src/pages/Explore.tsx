@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import GameRow from '../components/GameRow';
+import ScrollRow from '../components/ScrollRow';
 import { discoverGames, effectiveKey } from '../lib/catalog';
 import { type DiscoverFilters, GENRES, ORDERS, PERIODS, PLATFORMS, filtersFromParams, filtersToParams } from '../lib/discover';
 import type { Game } from '../lib/types';
@@ -117,10 +118,10 @@ export default function Explore() {
 
 function ChipRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="no-scrollbar flex items-center gap-2 overflow-x-auto px-5">
+    <ScrollRow className="flex items-center gap-2 px-5">
       <span className="w-20 shrink-0 text-xs font-semibold tracking-wide text-muted uppercase">{label}</span>
       {children}
-    </div>
+    </ScrollRow>
   );
 }
 
