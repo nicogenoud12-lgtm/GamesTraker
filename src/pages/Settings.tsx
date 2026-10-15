@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loade
 import { changePassword, syncNow } from '../lib/sync';
 import { useSync } from '../store/useSync';
 import PublicProfileToggle from '../components/PublicProfileToggle';
+import FriendsSettings from '../components/FriendsSettings';
 import { hasEnvKey } from '../lib/catalog';
 import { rawgSearch } from '../lib/rawg';
 import { tmdbSearch } from '../lib/tmdb';
@@ -17,6 +18,7 @@ export default function Settings() {
   const toast = useToast((s) => s.show);
   const fileRef = useRef<HTMLInputElement>(null);
   const mode = useMode();
+  const loggedIn = useSync((s) => Boolean(s.token));
 
   const exportData = () => {
     const { games, ratings, lists, logs } = useStore.getState();
@@ -50,6 +52,7 @@ export default function Settings() {
 
       <div className="space-y-4 px-5 lg:max-w-2xl">
         <SyncSection />
+        {loggedIn && <FriendsSettings />}
 
         {/* The section of the mode in use goes first. */}
         {(mode === 'games' ? ['rawg', 'tmdb'] : ['tmdb', 'rawg']).map((k) =>

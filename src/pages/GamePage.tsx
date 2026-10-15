@@ -10,6 +10,7 @@ import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/cat
 import ShareSheet from '../components/ShareSheet';
 import StartDate from '../components/StartDate';
 import { AgainHistory, AgainSheet } from '../components/Again';
+import FriendsOnTitle from '../components/FriendsOnTitle';
 import { againLabel } from '../lib/diary';
 import { ratingCard } from '../lib/cards';
 import { slug } from '../lib/shareImage';
@@ -340,6 +341,9 @@ export default function GamePage() {
       )}
       <div className="col-span-2 empty:hidden">
         <AgainHistory gameId={game.id} />
+      </div>
+      <div className="col-span-2 -mt-3 empty:hidden">
+        <FriendsOnTitle gameId={game.id} />
       </div>
     </div>
   );

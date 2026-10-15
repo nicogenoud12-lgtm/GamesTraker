@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import Cover from '../components/Cover';
 import { KINDS } from '../lib/kinds';
 import { MODES, kindOf, modeOf, type Mode } from '../lib/mode';
 import { fetchPublicProfile, type PublicProfile as Profile } from '../lib/sync';
 import { TIERS } from '../lib/tiers';
 import { useUi } from '../store/useUi';
+
+const ONE: Record<string, string> = {
+  juegos: 'juego puntuado',
+  'series y pelis': 'título puntuado',
+  películas: 'película puntuada',
+  series: 'serie puntuada',
+};
 
 /**
  * Someone's tier list, read-only, for anyone with the link (#/p/usuario).
@@ -15,6 +22,9 @@ import { useUi } from '../store/useUi';
  */
 export default function PublicProfile() {
   const { username = '' } = useParams();
+  const navigate = useNavigate();
+  // Opened from inside the app (e.g. Amigos): offer the way back.
+  const [canGoBack] = useState(() => window.history.state?.idx > 0);
   const [params, setParams] = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,10 +99,17 @@ export default function PublicProfile() {
     <div className="relative mx-auto min-h-dvh max-w-6xl pb-16">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-accent/20 to-transparent" />
       <header className="pt-safe px-5">
-        <Link to="/" className="mt-5 inline-block font-display text-lg font-bold tracking-tight">
-          {copy.brand}
-          <span className="grad-text">Tracker</span>
-        </Link>
+        <div className="mt-5 flex items-center gap-3">
+          {canGoBack && (
+            <button onClick={() => navigate(-1)} aria-label="Volver" className="rounded-full bg-white/10 p-2">
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <Link to="/" className="font-display text-lg font-bold tracking-tight">
+            {copy.brand}
+            <span className="grad-text">Tracker</span>
+          </Link>
+        </div>
         <div className="mt-6 flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 font-display text-2xl font-bold text-black uppercase">
             {profile.username[0]}
@@ -140,7 +157,7 @@ export default function PublicProfile() {
         </div>
 
         <p className="mt-4 text-sm text-muted">
-          {rated.length} {what} {active === 'games' ? 'puntuados' : 'puntuadas'}{average != null && <> · promedio <span className="font-semibold text-white">{average}</span></>}
+          {rated.length === 1 ? `1 ${ONE[what]}` : `${rated.length} ${what} ${what === 'juegos' ? 'puntuados' : 'puntuadas'}`}{average != null && <> · promedio <span className="font-semibold text-white">{average}</span></>}
           {legendary > 0 && <> · {legendary} {legendary === 1 ? 'histórico' : 'históricos'}</>}
         </p>
       </header>

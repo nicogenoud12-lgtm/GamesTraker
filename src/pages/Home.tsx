@@ -6,6 +6,7 @@ import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
 import YearLink from '../components/YearLink';
+import FriendsButton from '../components/FriendsButton';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { TIERS } from '../lib/tiers';
@@ -74,6 +75,7 @@ export default function Home() {
             </h1>
             <div className="flex items-center gap-2">
               <SyncBadge />
+              <FriendsButton />
               <Link to="/ajustes" aria-label="Ajustes" className="rounded-full bg-white/10 p-2.5 backdrop-blur">
                 <Settings size={18} />
               </Link>

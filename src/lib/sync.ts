@@ -61,7 +61,7 @@ function apply(data: SyncData) {
   });
 }
 
-async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, token = useSync.getState().token): Promise<T> {
+export async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, token = useSync.getState().token): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
@@ -104,8 +104,8 @@ export async function login(username: string, password: string): Promise<void> {
   useSync.getState().setSession(r.token, r.user.username);
 }
 
-export async function register(username: string, password: string): Promise<void> {
-  const r = await api<AuthResult>('POST', '/auth/register', { username, password }, '');
+export async function register(username: string, password: string, invite?: string): Promise<void> {
+  const r = await api<AuthResult>('POST', '/auth/register', { username, password, ...(invite ? { invite } : {}) }, '');
   useSync.getState().setSession(r.token, r.user.username);
   void checkServer();
 }
@@ -138,7 +138,8 @@ export interface PublicProfile {
 }
 
 export function fetchPublicProfile(username: string): Promise<PublicProfile> {
-  return api<PublicProfile>('GET', `/public/${encodeURIComponent(username)}`, undefined, '');
+  // With a session, friends can see it even when it isn't public.
+  return api<PublicProfile>('GET', `/public/${encodeURIComponent(username)}`);
 }
 
 /** The shareable link to someone's public profile in this app. */
