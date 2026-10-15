@@ -114,10 +114,12 @@ export async function rawgPopular(key: string, signal?: AbortSignal): Promise<Ga
 }
 
 export async function rawgDetail(key: string, rawgId: string): Promise<GameDetail> {
-  const [g, shots] = await Promise.all([
+  const [g, shots, stores] = await Promise.all([
     get<RawgDetail>(key, `/games/${rawgId}`),
     get<{ results: { image: string }[] }>(key, `/games/${rawgId}/screenshots`).catch(() => ({ results: [] })),
+    get<{ results: { url: string }[] }>(key, `/games/${rawgId}/stores`).catch(() => ({ results: [] })),
   ]);
+  const steam = stores.results.map((s) => /store\.steampowered\.com\/app\/(\d+)/.exec(s.url)?.[1]).find(Boolean);
   return {
     ...toGame(g),
     description: g.description_raw ?? '',
@@ -128,6 +130,7 @@ export async function rawgDetail(key: string, rawgId: string): Promise<GameDetai
     playtime: g.playtime || null,
     website: g.website || null,
     screenshots: shots.results.map((s) => s.image),
+    steamAppId: steam ?? null,
   };
 }
 

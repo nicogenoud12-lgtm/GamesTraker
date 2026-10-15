@@ -83,9 +83,14 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 - Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
   borrado no vuelve a aparecer.
 
-### Nota de críticos (IGDB)
+### Nota de críticos (Steam / IGDB)
 
-RAWG no tiene la nota de Metacritic de muchos juegos. Para esos, la ficha muestra la nota de críticos de
+RAWG no tiene la nota de Metacritic de muchos juegos. Para esos, el servidor la busca en la tienda de
+Steam (muestra el Metacritic de la versión de PC) sin necesitar ninguna cuenta ni clave. De Steam también
+sale el **puntaje de los usuarios** ("Steam 89%"), calculado como lo hace SteamDB: el porcentaje de reseñas
+positivas, acercado al 50% cuando hay pocas reseñas.
+
+Para juegos que no están en Steam se puede sumar, opcionalmente, la nota de críticos de
 [IGDB](https://www.igdb.com) (promedio de reseñas de medios), que el servidor pide con una app de Twitch:
 
 1. Entrá a <https://dev.twitch.tv/console> con tu cuenta de Twitch (hace falta tener activada la verificación
