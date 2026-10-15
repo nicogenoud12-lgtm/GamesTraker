@@ -18,8 +18,8 @@ export default function Settings() {
   const mode = useMode();
 
   const exportData = () => {
-    const { games, ratings, lists } = useStore.getState();
-    const blob = new Blob([JSON.stringify({ app: 'gamestraker', version: 1, games, ratings, lists }, null, 2)], {
+    const { games, ratings, lists, logs } = useStore.getState();
+    const blob = new Blob([JSON.stringify({ app: 'gamestraker', version: 1, games, ratings, lists, logs }, null, 2)], {
       type: 'application/json',
     });
     const a = document.createElement('a');

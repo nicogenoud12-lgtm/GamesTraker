@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Film, Layers, LayoutGrid, Rows3, Tv } from 'lucide-react';
+import { BookOpen, ChevronRight, Film, Layers, LayoutGrid, Rows3, Tv } from 'lucide-react';
 import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreRing } from '../components/Score';
@@ -94,13 +94,21 @@ export default function Library() {
             </div>
           )}
           {all.length > 0 && (
-            <div className="flex rounded-full border border-line bg-surface p-1">
-              <ViewButton active={view === 'escala'} label="Escala" onClick={() => set({ vista: null, tier: null })}>
-                <Rows3 size={18} />
-              </ViewButton>
-              <ViewButton active={view === 'grilla'} label="Grilla" onClick={() => set({ vista: 'grilla' })}>
-                <LayoutGrid size={18} />
-              </ViewButton>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/diario"
+                className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-muted transition hover:border-white/20 hover:text-white"
+              >
+                <BookOpen size={16} /> Diario
+              </Link>
+              <div className="flex rounded-full border border-line bg-surface p-1">
+                <ViewButton active={view === 'escala'} label="Escala" onClick={() => set({ vista: null, tier: null })}>
+                  <Rows3 size={18} />
+                </ViewButton>
+                <ViewButton active={view === 'grilla'} label="Grilla" onClick={() => set({ vista: 'grilla' })}>
+                  <LayoutGrid size={18} />
+                </ViewButton>
+              </div>
             </div>
           )}
         </div>

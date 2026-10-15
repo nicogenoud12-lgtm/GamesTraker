@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { BarChart3, Cloud, CloudOff, Compass, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
+import { BarChart3, BookOpen, Cloud, CloudOff, Compass, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
 import ModeSwitch from './ModeSwitch';
 import { MODES } from '../lib/mode';
 import { useMode } from '../store/useUi';
@@ -24,7 +24,7 @@ export default function Sidebar() {
     return id ? s.games[id] : undefined;
   });
   const nav = [...NAV];
-  nav.splice(4, 0, { to: '/mis-juegos', label: copy.collection, icon: copy.icon, end: false });
+  nav.splice(4, 0, { to: '/mis-juegos', label: copy.collection, icon: copy.icon, end: false }, { to: '/diario', label: 'Diario', icon: BookOpen, end: false });
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0d0d13] px-4 py-6 lg:flex">

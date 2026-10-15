@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localDay, uid } from '../lib/format';
-import type { Game, GameList, Rating } from '../lib/types';
+import type { Game, GameList, LogEntry, Rating } from '../lib/types';
 
 import {
   MODES,
@@ -38,6 +38,9 @@ interface State {
   startsAt: Record<string, number>;
   /** Yearly goals: "games-2026" → how many titles to finish. */
   goals: Record<string, { target: number; updatedAt: number }>;
+  /** Replays and rewatches, by id (the diary). */
+  logs: Record<string, LogEntry>;
+  logTombs: Record<string, number>;
   /** Local snapshots of every game the user has rated or listed. */
   games: Record<string, Game>;
   ratings: Record<string, Rating>;
@@ -52,6 +55,9 @@ interface State {
   setStart: (gameId: string, date: string) => void;
   setGoal: (key: string, target: number) => void;
   rememberGame: (game: Game) => void;
+  /** Records that a title was played or watched again on `date`. */
+  addLog: (game: Game, date: string, note: string) => void;
+  deleteLog: (id: string) => void;
   saveRating: (game: Game, rating: Omit<Rating, 'gameId' | 'createdAt' | 'updatedAt'>) => void;
   deleteRating: (gameId: string) => void;
 
@@ -85,6 +91,8 @@ export const useStore = create<State>()(
       starts: {},
       startsAt: {},
       goals: {},
+      logs: {},
+      logTombs: {},
       games: {},
       ratings: {},
       lists: SYSTEM_LISTS,
@@ -98,6 +106,23 @@ export const useStore = create<State>()(
         set((s) => ({ starts: { ...s.starts, [gameId]: date }, startsAt: { ...s.startsAt, [gameId]: Date.now() } })),
 
       rememberGame: (game) => set((s) => ({ games: { ...s.games, [game.id]: snapshot(game) } })),
+
+      addLog: (game, date, note) =>
+        set((s) => {
+          const now = Date.now();
+          const id = uid();
+          return {
+            games: { ...s.games, [game.id]: snapshot(game) },
+            logs: { ...s.logs, [id]: { id, gameId: game.id, date, note, createdAt: now, updatedAt: now } },
+          };
+        }),
+
+      deleteLog: (id) =>
+        set((s) => {
+          const logs = { ...s.logs };
+          delete logs[id];
+          return { logs, logTombs: { ...s.logTombs, [id]: Date.now() } };
+        }),
 
       saveRating: (game, rating) =>
         set((s) => {
@@ -166,7 +191,7 @@ export const useStore = create<State>()(
         set((s) => ({ lists: touch(s.lists, listId, (l) => ({ ...l, gameIds })) })),
 
       importData: (data) => {
-        const d = data as Partial<Pick<State, 'games' | 'ratings' | 'lists'>>;
+        const d = data as Partial<Pick<State, 'games' | 'ratings' | 'lists' | 'logs'>>;
         if (!d || typeof d !== 'object' || !d.games || !d.ratings || !Array.isArray(d.lists)) {
           throw new Error('El archivo no es un backup de GamesTracker');
         }
@@ -180,6 +205,8 @@ export const useStore = create<State>()(
           games: { ...s.games, ...d.games },
           ratings,
           lists,
+          // Backups from before the diary have no replays; keep the ones here.
+          logs: d.logs && typeof d.logs === 'object' ? { ...s.logs, ...d.logs } : s.logs,
           ratingTombs: {
             ...s.ratingTombs,
             ...Object.fromEntries(Object.keys(s.ratings).filter((id) => !ratings[id]).map((id) => [id, now])),
