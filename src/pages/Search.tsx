@@ -12,6 +12,7 @@ export default function Search() {
   const [query, setQuery] = useState(params.get('q') ?? '');
   const [results, setResults] = useState<Game[]>([]);
   const [popular, setPopular] = useState<Game[]>([]);
+  const [popularError, setPopularError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const key = effectiveKey(useStore((s) => s.apiKey));
@@ -20,8 +21,11 @@ export default function Search() {
   useEffect(() => {
     const ctrl = new AbortController();
     popularGames(key, ctrl.signal)
-      .then(setPopular)
-      .catch(() => {});
+      .then((r) => {
+        setPopular(r);
+        setPopularError(null);
+      })
+      .catch((e: Error) => e.name !== 'AbortError' && setPopularError(e.message));
     return () => ctrl.abort();
   }, [key]);
 
@@ -96,7 +100,9 @@ export default function Search() {
       )}
 
       <div className="px-5">
-        {error && <p className="mt-6 text-center text-sm text-rose-400">{error}</p>}
+        {(error || (!searching && popularError)) && (
+          <p className="mt-6 text-center text-sm text-rose-400">{error ?? popularError}</p>
+        )}
 
         {searching ? (
           <>

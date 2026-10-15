@@ -51,7 +51,13 @@ function toGame(g: RawgGame): Game {
 
 async function get<T>(key: string, path: string, params: Record<string, string> = {}, signal?: AbortSignal): Promise<T> {
   const qs = new URLSearchParams({ key, ...params });
-  const res = await fetch(`${API}${path}?${qs}`, { signal });
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}?${qs}`, { signal });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    throw new RawgError('No se pudo conectar con RAWG. Revisá que la API key sea válida (Ajustes).', 0);
+  }
   if (!res.ok) {
     throw new RawgError(res.status === 401 ? 'API key inválida' : `Error de RAWG (${res.status})`, res.status);
   }
