@@ -16,8 +16,14 @@ jobs:
         run: docker compose build
       - name: Probar la API de sincronización
         run: |
-          docker run -d --name api -p 8787:8787 -e SYNC_TOKEN=token-de-prueba-ci gamestraker-api
+          docker run -d --name api -p 8787:8787 gamestraker-api
           for i in $(seq 1 20); do curl -sf localhost:8787/api/health && break; sleep 1; done
-          curl -sf -H "Authorization: Bearer token-de-prueba-ci" -X PUT \
+          TOKEN=$(curl -sf -H 'Content-Type: application/json' \
+            -d '{"username":"ci-test","password":"clave-de-prueba"}' localhost:8787/api/auth/register | jq -r .token)
+          curl -sf -H "Authorization: Bearer $TOKEN" -X PUT \
             -d '{"baseVersion":0,"data":{"games":{},"ratings":{},"lists":[]}}' localhost:8787/api/state
-          curl -sf -H "Authorization: Bearer token-de-prueba-ci" localhost:8787/api/state | grep -q '"version":1'
+          curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/state | grep -q '"version":1'
+          # Con una cuenta creada, el registro queda cerrado y una sesión falsa no entra.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"username":"otro","password":"clave-de-prueba"}' localhost:8787/api/auth/register)" = 403
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer x.y' localhost:8787/api/state)" = 401

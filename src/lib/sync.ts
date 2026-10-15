@@ -12,7 +12,7 @@ const EMPTY: SyncData = { games: {}, ratings: {}, lists: [], ratingTombs: {}, li
 const PUSH_DELAY_MS = 1500;
 const POLL_MS = 60_000;
 
-class SyncError extends Error {
+export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
@@ -26,21 +26,58 @@ function pick(): SyncData {
   return { games, ratings, lists, ratingTombs, listTombs };
 }
 
-async function request<T>(method: 'GET' | 'PUT', token: string, body?: unknown): Promise<T> {
+async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, token = useSync.getState().token): Promise<T> {
   let res: Response;
   try {
-    res = await fetch('/api/state', {
+    res = await fetch(`/api${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       cache: 'no-store',
     });
   } catch {
-    throw new SyncError('Sin conexión con el servidor', 0);
+    throw new ApiError('Sin conexión con el servidor', 0);
   }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok && res.status !== 409) throw new SyncError(json.error ?? `Error del servidor (${res.status})`, res.status);
+  if (!res.ok && res.status !== 409) throw new ApiError(json.error ?? `Error del servidor (${res.status})`, res.status);
   return { ...json, __status: res.status } as T;
+}
+
+/** Asks the server whether accounts exist; null when there is no sync server. */
+export async function checkServer(): Promise<void> {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    const json = res.ok ? await res.json() : null;
+    useSync.setState({
+      server: json?.ok ? { hasUsers: Boolean(json.hasUsers), signupOpen: Boolean(json.signupOpen) } : null,
+    });
+  } catch {
+    useSync.setState({ server: null });
+  }
+}
+
+interface AuthResult {
+  token: string;
+  user: { username: string };
+}
+
+export async function login(username: string, password: string): Promise<void> {
+  const r = await api<AuthResult>('POST', '/auth/login', { username, password }, '');
+  useSync.getState().setSession(r.token, r.user.username);
+}
+
+export async function register(username: string, password: string): Promise<void> {
+  const r = await api<AuthResult>('POST', '/auth/register', { username, password }, '');
+  useSync.getState().setSession(r.token, r.user.username);
+  void checkServer();
+}
+
+export async function changePassword(current: string, next: string): Promise<void> {
+  const r = await api<{ token: string }>('POST', '/auth/password', { current, next });
+  useSync.setState({ token: r.token });
 }
 
 let running = false;
@@ -50,9 +87,8 @@ let pushTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Pulls the server copy, merges it with this device's and pushes the result if it changed. */
 export async function syncNow(): Promise<void> {
-  const { token } = useSync.getState();
-  if (!token) {
-    useSync.setState({ status: 'off', error: null });
+  if (!useSync.getState().token) {
+    useSync.setState({ status: 'off' });
     return;
   }
   if (running) {
@@ -63,7 +99,7 @@ export async function syncNow(): Promise<void> {
   useSync.setState({ status: 'syncing' });
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
-      const remote = await request<RemoteDoc>('GET', token);
+      const remote = await api<RemoteDoc>('GET', '/state');
       const remoteData = remote.data ?? EMPTY;
       const local = pick();
       const merged = mergeData(local, remoteData);
@@ -75,13 +111,14 @@ export async function syncNow(): Promise<void> {
       }
       if (remote.data && stableStringify(merged) === stableStringify(remoteData)) break;
 
-      const put = await request<{ __status: number }>('PUT', token, { baseVersion: remote.version, data: merged });
+      const put = await api<{ __status: number }>('PUT', '/state', { baseVersion: remote.version, data: merged });
       if (put.__status !== 409) break;
       // Another device wrote in between: loop to merge its changes too.
     }
     useSync.setState({ status: 'ok', error: null, lastSyncAt: Date.now() });
   } catch (e) {
-    useSync.setState({ status: 'error', error: (e as Error).message });
+    if (e instanceof ApiError && e.status === 401) useSync.getState().logout(e.message);
+    else useSync.setState({ status: 'error', error: (e as Error).message });
   } finally {
     running = false;
     if (again) {
@@ -102,13 +139,14 @@ export function startSync(): () => void {
     if (s.ratings !== prev.ratings || s.lists !== prev.lists || s.games !== prev.games) schedule();
   });
   const unsubToken = useSync.subscribe((s, prev) => {
-    if (s.token !== prev.token) void syncNow();
+    if (s.token && s.token !== prev.token && s.username !== prev.username) void syncNow();
   });
   const onVisible = () => document.visibilityState === 'visible' && void syncNow();
   const onOnline = () => void syncNow();
   document.addEventListener('visibilitychange', onVisible);
   window.addEventListener('online', onOnline);
   const poll = setInterval(() => document.visibilityState === 'visible' && void syncNow(), POLL_MS);
+  void checkServer();
   void syncNow();
   return () => {
     unsubStore();
@@ -118,9 +156,4 @@ export function startSync(): () => void {
     document.removeEventListener('visibilitychange', onVisible);
     window.removeEventListener('online', onOnline);
   };
-}
-
-/** Checks a code against the server without saving it. */
-export async function testToken(token: string): Promise<void> {
-  await request('GET', token.trim());
 }

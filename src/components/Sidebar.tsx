@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { BarChart3, Cloud, CloudOff, Compass, Gamepad2, House, ListOrdered, RefreshCw, Search, Settings } from 'lucide-react';
+import { BarChart3, Cloud, CloudOff, Compass, Gamepad2, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
 import Cover from './Cover';
 import { NEXT_LIST_ID, useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
@@ -76,7 +76,15 @@ export default function Sidebar() {
 
 function SyncLine() {
   const status = useSync((s) => s.status);
-  if (status === 'off') return null;
+  const canLogin = useSync((s) => !s.token && s.server !== null);
+  if (status === 'off') {
+    if (!canLogin) return null;
+    return (
+      <Link to="/cuenta" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-accent hover:bg-white/5">
+        <LogIn size={17} /> Iniciar sesión
+      </Link>
+    );
+  }
   const Icon = status === 'error' ? CloudOff : status === 'syncing' ? RefreshCw : Cloud;
   const label = status === 'error' ? 'Error al sincronizar' : status === 'syncing' ? 'Sincronizando…' : 'Sincronizado';
   return (

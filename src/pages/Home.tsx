@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight, Cloud, CloudOff, Compass, Play, RefreshCw, Search, Settings } from 'lucide-react';
 import { useSync } from '../store/useSync';
+import LoginInvite from '../components/LoginInvite';
 import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
@@ -76,6 +77,8 @@ export default function Home() {
           </div>
         </header>
       </div>
+
+      <LoginInvite className="mx-5 mt-5" />
 
       {rated.length === 0 && next.length === 0 && playing.length === 0 && (
         <section className="mx-5 mt-6 rounded-3xl border border-line bg-surface p-6 text-center">
@@ -278,6 +281,8 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
           ))}
         </div>
       </header>
+
+      <LoginInvite className="mt-6" />
 
       {empty && (
         <section className="relative mt-8 flex items-center justify-between gap-6 rounded-3xl border border-line bg-surface p-8">
