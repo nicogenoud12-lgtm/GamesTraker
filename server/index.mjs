@@ -160,7 +160,7 @@ function recordFail(username) {
   fails.set(username, { count: fresh ? 1 : f.count + 1, until: Date.now() + LOCK_MS });
 }
 
-const publicUser = (u) => ({ username: u.username });
+const publicUser = (u) => ({ username: u.username, public: Boolean(u.public) });
 
 async function register(body) {
   const username = normalize(body.username);
@@ -412,6 +412,63 @@ function imdbRating(tconst) {
   return null;
 }
 
+// ---------- public profiles ----------
+// Opt-in, read-only view of someone's ratings and lists for a shareable link.
+// Notes, platforms, dates started and API keys never leave the server.
+
+async function setPublic(user, value) {
+  if (typeof value !== 'boolean') throw new HttpError(400, 'Formato inválido');
+  return serial(async () => {
+    const db = await loadUsers();
+    const u = db.users.find((x) => x.id === user.id);
+    if (!u) throw new HttpError(401, 'Sesión inválida, volvé a iniciar sesión');
+    u.public = value;
+    await writeJson(USERS_FILE, db);
+    return publicUser(u);
+  });
+}
+
+const str = (v, max = 300) => (typeof v === 'string' ? v.slice(0, max) : null);
+
+async function publicProfile(name) {
+  const username = normalize(name);
+  const user = (await loadUsers()).users.find((u) => u.username === username);
+  if (!user?.public) throw new HttpError(404, 'Este perfil no existe o no es público');
+  const doc = await readJson(stateFile(user.id), { updatedAt: null, data: null });
+  const data = doc.data ?? { games: {}, ratings: {}, lists: [] };
+  const ratings = {};
+  for (const [id, r] of Object.entries(data.ratings ?? {})) {
+    if (!r || typeof r.score !== 'number') continue;
+    ratings[id] = { gameId: id, score: r.score, tier: str(r.tier, 20), status: str(r.status, 20), finishedAt: str(r.finishedAt, 10) };
+  }
+  const lists = (Array.isArray(data.lists) ? data.lists : [])
+    .filter((l) => l && Array.isArray(l.gameIds) && l.gameIds.length)
+    .map((l) => ({
+      id: str(l.id, 60),
+      name: str(l.name, 80),
+      emoji: str(l.emoji, 40),
+      mode: l.mode === 'screen' ? 'screen' : l.mode === 'games' ? 'games' : undefined,
+      system: Boolean(l.system),
+      gameIds: l.gameIds.filter((g) => typeof g === 'string').slice(0, 500),
+    }));
+  const wanted = new Set([...Object.keys(ratings), ...lists.flatMap((l) => l.gameIds)]);
+  const games = {};
+  for (const id of wanted) {
+    const g = data.games?.[id];
+    if (!g) continue;
+    games[id] = {
+      id,
+      name: str(g.name),
+      // Covers made on the device (data URLs) can be huge; the profile shows the title instead.
+      cover: typeof g.cover === 'string' && g.cover.startsWith('https://') ? g.cover : null,
+      released: str(g.released, 10),
+      genres: Array.isArray(g.genres) ? g.genres.filter((x) => typeof x === 'string').slice(0, 6) : [],
+      platforms: [],
+    };
+  }
+  return { username: user.username, updatedAt: doc.updatedAt ?? null, games, ratings, lists };
+}
+
 // ---------- covers for share images ----------
 // A canvas can only be exported if its images come from our own origin, so
 // covers for the share images are fetched through here. Only these hosts.
@@ -475,6 +532,16 @@ async function handle(req, res) {
   const { pathname } = url;
   const route = `${req.method} ${pathname}`;
 
+  if (req.method === 'GET' && pathname.startsWith('/api/public/')) {
+    let name;
+    try {
+      name = decodeURIComponent(pathname.slice('/api/public/'.length));
+    } catch {
+      throw new HttpError(404, 'Este perfil no existe o no es público');
+    }
+    return send(res, 200, await publicProfile(name));
+  }
+
   switch (route) {
     case 'GET /api/health': {
       const { users } = await loadUsers();
@@ -500,6 +567,11 @@ async function handle(req, res) {
       }
       const updated = await setPassword(user.username, body.next);
       return send(res, 200, { token: issueToken(updated) });
+    }
+    case 'POST /api/profile': {
+      const user = await authenticate(req);
+      const body = await readBody(req);
+      return send(res, 200, { user: await setPublic(user, body.public) });
     }
     case 'GET /api/state': {
       const user = await authenticate(req);

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, LogIn, RefreshCw, Upload } from 'lucide-react';
 import { changePassword, syncNow } from '../lib/sync';
 import { useSync } from '../store/useSync';
+import PublicProfileToggle from '../components/PublicProfileToggle';
 import { hasEnvKey } from '../lib/catalog';
 import { rawgSearch } from '../lib/rawg';
 import { tmdbSearch } from '../lib/tmdb';
@@ -211,6 +212,7 @@ function SyncSection() {
               </button>
             </div>
           )}
+          <PublicProfileToggle username={username} />
           <button
             onClick={() => {
               if (confirm('¿Cerrar sesión en este dispositivo? Tus datos quedan acá y en tu cuenta.')) logout();

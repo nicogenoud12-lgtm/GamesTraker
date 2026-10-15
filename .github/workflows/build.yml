@@ -33,3 +33,8 @@ jobs:
           # La nota de críticos pide sesión y el nombre del juego.
           test "$(curl -s -o /dev/null -w '%{http_code}' 'localhost:8787/api/critics?name=Hades')" = 401
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/critics')" = 400
+          # El perfil público está apagado hasta que se activa, y nunca muestra las notas.
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8787/api/public/ci-test)" = 404
+          curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"public":true}' \
+            localhost:8787/api/profile | grep -q '"public":true'
+          curl -sf localhost:8787/api/public/ci-test | grep -q '"username":"ci-test"'
