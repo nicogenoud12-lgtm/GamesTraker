@@ -9,8 +9,8 @@ export interface SyncData {
   listTombs: Record<string, number>;
   /** Start dates per game; missing in documents saved by older versions. */
   starts?: Record<string, string>;
-  /** RAWG key shared across devices; the most recently changed one wins. */
-  settings?: { apiKey: string; updatedAt: number };
+  /** API keys shared across devices; for each one, the most recently changed wins. */
+  settings?: { apiKey: string; updatedAt: number; tmdbKey?: string; tmdbUpdatedAt?: number };
 }
 
 function newestTombs(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
@@ -47,7 +47,14 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
 
   const sa = a.settings ?? { apiKey: '', updatedAt: 0 };
   const sb = b.settings ?? { apiKey: '', updatedAt: 0 };
-  const settings = sb.updatedAt > sa.updatedAt ? sb : sa;
+  const rawg = sb.updatedAt > sa.updatedAt ? sb : sa;
+  const tmdb = (sb.tmdbUpdatedAt ?? 0) > (sa.tmdbUpdatedAt ?? 0) ? sb : sa;
+  const settings = {
+    apiKey: rawg.apiKey,
+    updatedAt: rawg.updatedAt,
+    tmdbKey: tmdb.tmdbKey ?? '',
+    tmdbUpdatedAt: tmdb.tmdbUpdatedAt ?? 0,
+  };
 
   return {
     games: { ...b.games, ...a.games },

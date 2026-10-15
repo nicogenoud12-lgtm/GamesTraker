@@ -1,44 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, LogIn, RefreshCw, Upload } from 'lucide-react';
 import { changePassword, syncNow } from '../lib/sync';
 import { useSync } from '../store/useSync';
 import { hasEnvKey } from '../lib/catalog';
 import { rawgSearch } from '../lib/rawg';
+import { tmdbSearch } from '../lib/tmdb';
+import { useMode } from '../store/useUi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const apiKey = useStore((s) => s.apiKey);
-  const setApiKey = useStore((s) => s.setApiKey);
   const importData = useStore((s) => s.importData);
   const toast = useToast((s) => s.show);
-  const [draft, setDraft] = useState(apiKey);
-  const loggedIn = useSync((s) => Boolean(s.token));
-  // A key that arrives from another device fills the field too.
-  useEffect(() => setDraft((d) => d || apiKey), [apiKey]);
-  const [testing, setTesting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const saveKey = async () => {
-    const key = draft.trim();
-    if (!key) {
-      setApiKey('');
-      toast('API key eliminada');
-      return;
-    }
-    setTesting(true);
-    try {
-      await rawgSearch(key, 'zelda');
-      setApiKey(key);
-      toast('¡Conectado a RAWG!');
-    } catch (e) {
-      toast((e as Error).message || 'No se pudo conectar');
-    } finally {
-      setTesting(false);
-    }
-  };
+  const mode = useMode();
 
   const exportData = () => {
     const { games, ratings, lists } = useStore.getState();
@@ -73,51 +50,48 @@ export default function Settings() {
       <div className="space-y-4 px-5 lg:max-w-2xl">
         <SyncSection />
 
-        <section className="rounded-3xl border border-line bg-surface p-5">
-          <div className="flex items-center gap-2">
-            <KeyRound size={18} className="text-accent" />
-            <h2 className="font-display text-lg font-bold">Base de juegos (RAWG)</h2>
-          </div>
-          <p className="mt-2 text-sm text-muted">
-            GamesTraker usa la base de RAWG: más de 800.000 juegos con carátulas, plataformas y capturas. La key es gratis.
-          </p>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-white/80">
-            <li>
-              Creá una cuenta en{' '}
-              <a href="https://rawg.io/apidocs" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent">
-                rawg.io/apidocs <ExternalLink size={12} />
-              </a>
-            </li>
-            <li>Copiá tu API key y pegala acá.</li>
-          </ol>
-          <div className="mt-4 flex gap-2">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={hasEnvKey() ? 'Usando la key del servidor' : 'Pegá tu API key'}
-              className="min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-4 py-3 font-mono text-sm placeholder:font-sans placeholder:text-muted/60"
-              autoComplete="off"
-              spellCheck={false}
+        {/* The section of the mode in use goes first. */}
+        {(mode === 'games' ? ['rawg', 'tmdb'] : ['tmdb', 'rawg']).map((k) =>
+          k === 'rawg' ? (
+            <KeySection
+              key="rawg"
+              title="Base de juegos (RAWG)"
+              description="Los juegos salen de RAWG: más de 800.000 juegos con carátulas, plataformas y capturas. La key es gratis."
+              steps={[
+                <>
+                  Creá una cuenta en{' '}
+                  <ExtLink href="https://rawg.io/apidocs">rawg.io/apidocs</ExtLink>
+                </>,
+                'Copiá tu API key y pegala acá.',
+              ]}
+              selector={(st) => st.apiKey}
+              save={(v) => useStore.getState().setApiKey(v)}
+              env={hasEnvKey('rawg')}
+              test={(v) => rawgSearch(v, 'zelda').then(() => undefined)}
+              service="RAWG"
             />
-            <button
-              onClick={saveKey}
-              disabled={testing}
-              className="flex items-center rounded-2xl bg-white px-4 font-semibold text-black disabled:opacity-60"
-            >
-              {testing ? <Loader2 size={18} className="animate-spin" /> : 'Guardar'}
-            </button>
-          </div>
-          {(apiKey || hasEnvKey()) && (
-            <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald-400">
-              <CheckCircle2 size={16} /> Conectado
-            </p>
-          )}
-          <p className="mt-2 text-xs text-muted">
-            {loggedIn
-              ? 'Se guarda en tu cuenta: llega sola a los otros dispositivos donde inicies sesión.'
-              : 'Iniciá sesión para que la key llegue sola a tus otros dispositivos.'}
-          </p>
-        </section>
+          ) : (
+            <KeySection
+              key="tmdb"
+              title="Base de series y pelis (TMDB)"
+              description="Las series y películas salen de TMDB: pósters, sinopsis en castellano, tráileres y dónde verlas en Argentina. La key es gratis."
+              steps={[
+                <>
+                  Creá una cuenta en <ExtLink href="https://www.themoviedb.org/signup">themoviedb.org</ExtLink>
+                </>,
+                <>
+                  Andá a <ExtLink href="https://www.themoviedb.org/settings/api">Ajustes → API</ExtLink>, pedí una key (uso personal) y
+                  pegá la "Clave de la API" o el "Token de acceso de lectura".
+                </>,
+              ]}
+              selector={(st) => st.tmdbKey}
+              save={(v) => useStore.getState().setTmdbKey(v)}
+              env={hasEnvKey('tmdb')}
+              test={(v) => tmdbSearch(v, 'dune').then(() => undefined)}
+              service="TMDB"
+            />
+          ),
+        )}
 
         <section className="rounded-3xl border border-line bg-surface p-5">
           <h2 className="font-display text-lg font-bold">Tus datos</h2>
@@ -267,6 +241,92 @@ function SyncSection() {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+function ExtLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent">
+      {children} <ExternalLink size={12} />
+    </a>
+  );
+}
+
+interface KeySectionProps {
+  title: string;
+  description: string;
+  steps: ReactNode[];
+  selector: (s: ReturnType<typeof useStore.getState>) => string;
+  save: (value: string) => void;
+  env: boolean;
+  test: (value: string) => Promise<void>;
+  service: string;
+}
+
+function KeySection({ title, description, steps, selector, save, env, test, service }: KeySectionProps) {
+  const current = useStore(selector);
+  const loggedIn = useSync((s) => Boolean(s.token));
+  const toast = useToast((s) => s.show);
+  const [draft, setDraft] = useState(current);
+  const [testing, setTesting] = useState(false);
+  // A key that arrives from another device fills the field too.
+  useEffect(() => setDraft((d) => d || current), [current]);
+
+  const onSave = async () => {
+    const key = draft.trim();
+    if (!key) {
+      save('');
+      toast('Key eliminada');
+      return;
+    }
+    setTesting(true);
+    try {
+      await test(key);
+      save(key);
+      toast(`¡Conectado a ${service}!`);
+    } catch (e) {
+      toast((e as Error).message || 'No se pudo conectar');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-3xl border border-line bg-surface p-5">
+      <div className="flex items-center gap-2">
+        <KeyRound size={18} className="text-accent" />
+        <h2 className="font-display text-lg font-bold">{title}</h2>
+      </div>
+      <p className="mt-2 text-sm text-muted">{description}</p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-white/80">
+        {steps.map((step, i) => (
+          <li key={i}>{step}</li>
+        ))}
+      </ol>
+      <div className="mt-4 flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={env ? 'Usando la key del servidor' : 'Pegá tu key'}
+          className="min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-4 py-3 font-mono text-sm placeholder:font-sans placeholder:text-muted/60"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <button onClick={onSave} disabled={testing} className="flex items-center rounded-2xl bg-white px-4 font-semibold text-black disabled:opacity-60">
+          {testing ? <Loader2 size={18} className="animate-spin" /> : 'Guardar'}
+        </button>
+      </div>
+      {(current || env) && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald-400">
+          <CheckCircle2 size={16} /> Conectado
+        </p>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        {loggedIn
+          ? 'Se guarda en tu cuenta: llega sola a los otros dispositivos donde inicies sesión.'
+          : 'Iniciá sesión para que la key llegue sola a tus otros dispositivos.'}
+      </p>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { Check, Plus } from 'lucide-react';
 import { useState } from 'react';
 import Sheet from './Sheet';
 import ListIcon from './ListIcon';
+import { listMode, modeOf } from '../lib/mode';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
@@ -13,7 +14,8 @@ interface Props {
 }
 
 export default function ListPickerSheet({ game, open, onClose }: Props) {
-  const lists = useStore((s) => s.lists);
+  const mode = modeOf(game.id);
+  const lists = useStore((s) => s.lists).filter((l) => listMode(l) === mode);
   const addToList = useStore((s) => s.addToList);
   const removeFromList = useStore((s) => s.removeFromList);
   const createList = useStore((s) => s.createList);
@@ -33,7 +35,7 @@ export default function ListPickerSheet({ game, open, onClose }: Props) {
   const create = () => {
     const name = newName.trim();
     if (!name) return;
-    const id = createList(name, 'bookmark');
+    const id = createList(name, 'bookmark', mode);
     addToList(id, game);
     setNewName('');
     toast(`Agregado a ${name}`);

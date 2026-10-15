@@ -1,6 +1,9 @@
 # GamesTraker
 
-App para puntuar los juegos que vas jugando y armar tu lista de próximos.
+App para puntuar los juegos que vas jugando y armar tu lista de próximos… y lo mismo con series y películas.
+
+- **Dos modos con un switch**: **Juegos** (violeta) y **Series y pelis** (ámbar). Cada uno tiene sus propias
+  listas, colección, descubrir y estadísticas, como si fueran dos apps dentro de la misma.
 
 - **Puntaje 0–100** + **puntaje en palabras**: Malo 💀 · Aburrido 😴 · Safa 🤷 · Bueno 👍 · Buenísimo 🔥 · Histórico 👑.
   La palabra se sugiere según el número, pero podés elegir otra.
@@ -15,6 +18,8 @@ App para puntuar los juegos que vas jugando y armar tu lista de próximos.
   iniciar sesión, todo queda en el dispositivo; desde Ajustes también se puede exportar/importar un backup.
 - **Descubrir**: recomendaciones, rankings por año/década y explorador con filtros.
 - **De la misma saga** en la ficha de cada juego y **estadísticas por año**.
+- **Series y pelis** con datos de [TMDB](https://www.themoviedb.org): "Viendo ahora", "Quiero ver", dónde verla
+  (Netflix, Prime Video, Disney+, Max…), tráiler, reparto y recomendaciones. Sin key, modo demo.
 
 Animaciones de [React Bits](https://reactbits.dev): Aurora (fondo del inicio), TiltedCard (carátula en la ficha)
 y CountUp (estadísticas), en `src/components/reactbits/`.
@@ -27,7 +32,8 @@ cp .env.example .env   # opcional: VITE_RAWG_KEY=tu_key
 npm run dev
 ```
 
-La API key de RAWG es gratis: <https://rawg.io/apidocs>. También se puede pegar desde Ajustes dentro de la app.
+La API key de RAWG es gratis: <https://rawg.io/apidocs>, y la de TMDB también: <https://www.themoviedb.org/settings/api>.
+Las dos se pueden pegar desde Ajustes dentro de la app y se sincronizan con la cuenta.
 
 ## Deploy
 
@@ -77,7 +83,7 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 - Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
   borrado no vuelve a aparecer.
 
-La key de RAWG se mete en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
+Las keys de RAWG y TMDB (`VITE_RAWG_KEY`, `VITE_TMDB_KEY`) se meten en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
 volver a correr `docker compose up -d --build`.
 
 ### Chequeo de PRs

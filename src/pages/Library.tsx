@@ -7,6 +7,8 @@ import { ScoreRing } from '../components/Score';
 import { TIERS, TIER_BY_ID, type Tier } from '../lib/tiers';
 import type { Game, Rating, TierId } from '../lib/types';
 import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
+import { MODES, modeOf } from '../lib/mode';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
@@ -41,8 +43,10 @@ export default function Library() {
     setParams(next, { replace: true });
   };
 
+  const mode = useMode();
+  const copy = MODES[mode];
   const all: Entry[] = Object.values(ratings)
-    .filter((r) => games[r.gameId])
+    .filter((r) => games[r.gameId] && modeOf(r.gameId) === mode)
     .map((r) => ({ game: games[r.gameId], rating: r }));
   const byScore = (a: Entry, b: Entry) => b.rating.score - a.rating.score || b.rating.updatedAt - a.rating.updatedAt;
   const avg = all.length ? Math.round(all.reduce((n, e) => n + e.rating.score, 0) / all.length) : 0;
@@ -53,7 +57,7 @@ export default function Library() {
         <div className="flex items-end justify-between gap-3 pt-6 pb-4 lg:pt-10 lg:pb-6">
           <div>
             <p className="text-sm text-muted">Tu colección</p>
-            <h1 className="font-display text-3xl font-bold tracking-tight lg:text-4xl">Mis juegos</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight lg:text-4xl">{copy.collection}</h1>
           </div>
           {all.length > 0 && (
             <div className="flex rounded-full border border-line bg-surface p-1">
@@ -72,9 +76,9 @@ export default function Library() {
         <div className="mx-5 rounded-3xl border border-line bg-surface p-6 text-center">
           <p className="text-4xl">🕹️</p>
           <p className="mt-3 font-display text-lg font-bold">Todavía no puntuaste nada</p>
-          <p className="mt-1 text-sm text-muted">Tus juegos van a aparecer acá, ordenados por tu escala.</p>
+          <p className="mt-1 text-sm text-muted">Tus {mode === 'games' ? 'juegos' : 'series y pelis'} van a aparecer acá, ordenados por tu escala.</p>
           <Link to="/buscar" className="mt-4 inline-block rounded-full bg-white px-5 py-2.5 font-semibold text-black">
-            Buscar un juego
+            {mode === 'games' ? 'Buscar un juego' : 'Buscar una serie o peli'}
           </Link>
         </div>
       ) : (

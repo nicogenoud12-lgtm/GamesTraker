@@ -22,8 +22,17 @@ export class ApiError extends Error {
 }
 
 function pick(): SyncData {
-  const { games, ratings, lists, ratingTombs, listTombs, starts, apiKey, apiKeyUpdatedAt } = useStore.getState();
-  return { games, ratings, lists, ratingTombs, listTombs, starts, settings: { apiKey, updatedAt: apiKeyUpdatedAt } };
+  const { games, ratings, lists, ratingTombs, listTombs, starts, apiKey, apiKeyUpdatedAt, tmdbKey, tmdbKeyUpdatedAt } =
+    useStore.getState();
+  return {
+    games,
+    ratings,
+    lists,
+    ratingTombs,
+    listTombs,
+    starts,
+    settings: { apiKey, updatedAt: apiKeyUpdatedAt, tmdbKey, tmdbUpdatedAt: tmdbKeyUpdatedAt },
+  };
 }
 
 /** Writes merged data back into the store (settings live in separate store fields). */
@@ -32,7 +41,14 @@ function apply(data: SyncData) {
   useStore.setState({
     ...rest,
     starts: rest.starts ?? {},
-    ...(settings ? { apiKey: settings.apiKey, apiKeyUpdatedAt: settings.updatedAt } : {}),
+    ...(settings
+      ? {
+          apiKey: settings.apiKey,
+          apiKeyUpdatedAt: settings.updatedAt,
+          tmdbKey: settings.tmdbKey ?? '',
+          tmdbKeyUpdatedAt: settings.tmdbUpdatedAt ?? 0,
+        }
+      : {}),
   });
 }
 
@@ -151,7 +167,8 @@ export function startSync(): () => void {
       s.lists !== prev.lists ||
       s.games !== prev.games ||
       s.starts !== prev.starts ||
-      s.apiKey !== prev.apiKey
+      s.apiKey !== prev.apiKey ||
+      s.tmdbKey !== prev.tmdbKey
     ) {
       schedule();
     }

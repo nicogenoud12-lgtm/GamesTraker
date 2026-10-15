@@ -1,80 +1,130 @@
 import { DEMO_GAMES, demoSearch } from '../data/demo';
-import { type DiscoverFilters, filterDemo, genreSlug, toRawgQuery } from './discover';
+import { DEMO_SCREEN, demoScreenSearch } from '../data/demoScreen';
+import { type DiscoverFilters, filterDemo, filterDemoScreen, genreSlug, toRawgQuery, toTmdbQuery } from './discover';
+import { kindOf, type Mode } from './mode';
 import { rawgDetail, rawgDiscover, rawgPopular, rawgSearch, rawgSeries } from './rawg';
+import { tmdbCollection, tmdbDetail, tmdbList, tmdbRecommendations, tmdbSearch, tmdbTrending } from './tmdb';
 import type { Game, GameDetail } from './types';
+import { useStore } from '../store/useStore';
 
-// Single entry point for game data: RAWG when a key is configured, otherwise
-// the bundled demo catalog.
+// Single entry point for catalog data. Games come from RAWG, series & movies
+// from TMDB; without a key each mode falls back to its bundled demo catalog.
 
-const ENV_KEY = (import.meta.env.VITE_RAWG_KEY as string | undefined) ?? '';
-
-export function effectiveKey(userKey: string): string {
-  return userKey.trim() || ENV_KEY;
+export interface Keys {
+  rawg: string;
+  tmdb: string;
 }
 
-export function hasEnvKey(): boolean {
-  return ENV_KEY.length > 0;
+const ENV = {
+  rawg: (import.meta.env.VITE_RAWG_KEY as string | undefined) ?? '',
+  tmdb: (import.meta.env.VITE_TMDB_KEY as string | undefined) ?? '',
+};
+
+export function hasEnvKey(which: keyof Keys): boolean {
+  return ENV[which].length > 0;
 }
 
-export async function searchGames(key: string, query: string, signal?: AbortSignal): Promise<Game[]> {
-  if (!key) return demoSearch(query);
-  return rawgSearch(key, query, signal);
+/** Keys typed in Ajustes (or synced from the account) win over the server's build-time ones. */
+export function useKeys(): Keys {
+  const rawg = useStore((s) => s.apiKey);
+  const tmdb = useStore((s) => s.tmdbKey);
+  return { rawg: rawg.trim() || ENV.rawg, tmdb: tmdb.trim() || ENV.tmdb };
 }
 
-export async function popularGames(key: string, signal?: AbortSignal): Promise<Game[]> {
-  if (!key) return DEMO_GAMES.slice().sort((a, b) => (b.released ?? '').localeCompare(a.released ?? '')).slice(0, 12);
-  return rawgPopular(key, signal);
+export const keyFor = (mode: Mode, keys: Keys) => (mode === 'games' ? keys.rawg : keys.tmdb);
+
+const demoScreenId = (id: string) => id.startsWith('dscr:');
+
+export async function searchItems(mode: Mode, keys: Keys, query: string, signal?: AbortSignal): Promise<Game[]> {
+  if (mode === 'games') return keys.rawg ? rawgSearch(keys.rawg, query, signal) : demoSearch(query);
+  return keys.tmdb ? tmdbSearch(keys.tmdb, query, signal) : demoScreenSearch(query);
+}
+
+export async function popularItems(mode: Mode, keys: Keys, signal?: AbortSignal): Promise<Game[]> {
+  const byDate = (a: Game, b: Game) => (b.released ?? '').localeCompare(a.released ?? '');
+  if (mode === 'games') return keys.rawg ? rawgPopular(keys.rawg, signal) : DEMO_GAMES.slice().sort(byDate).slice(0, 12);
+  return keys.tmdb ? tmdbTrending(keys.tmdb, signal) : DEMO_SCREEN.slice().sort(byDate).slice(0, 12);
 }
 
 const detailCache = new Map<string, GameDetail>();
 
-export async function gameDetail(key: string, id: string): Promise<GameDetail | null> {
+export async function itemDetail(keys: Keys, id: string): Promise<GameDetail | null> {
   const cached = detailCache.get(id);
   if (cached) return cached;
-  const [source, ref] = id.split(':');
+  const parts = id.split(':');
   let detail: GameDetail | null = null;
-  if (source === 'demo') detail = DEMO_GAMES.find((g) => g.id === id) ?? null;
-  else if (source === 'rawg' && key) detail = await rawgDetail(key, ref);
+  if (parts[0] === 'demo') detail = DEMO_GAMES.find((g) => g.id === id) ?? null;
+  else if (parts[0] === 'dscr') detail = DEMO_SCREEN.find((g) => g.id === id) ?? null;
+  else if (parts[0] === 'rawg' && keys.rawg) detail = await rawgDetail(keys.rawg, parts[1]);
+  else if (parts[0] === 'tmdb' && keys.tmdb) detail = await tmdbDetail(keys.tmdb, kindOf(id)!, parts[2]);
   if (detail) detailCache.set(id, detail);
   return detail;
 }
 
-export async function discoverGames(
-  key: string,
+const oldestFirst = (games: Game[], id: string) =>
+  games.filter((g) => g.id !== id).sort((a, b) => (a.released ?? '9999').localeCompare(b.released ?? '9999'));
+
+/**
+ * Other entries of the same saga, oldest first: RAWG's game series, a TMDB
+ * movie collection, or a name/saga match in the demo catalogs.
+ */
+export async function sagaItems(keys: Keys, id: string, detail: GameDetail | null, signal?: AbortSignal): Promise<Game[]> {
+  const parts = id.split(':');
+  if (parts[0] === 'rawg' && keys.rawg) return oldestFirst(await rawgSeries(keys.rawg, parts[1], signal), id);
+  if (parts[0] === 'tmdb' && keys.tmdb && detail?.collectionId) {
+    return oldestFirst(await tmdbCollection(keys.tmdb, detail.collectionId, signal), id);
+  }
+  if (parts[0] === 'demo') {
+    const self = DEMO_GAMES.find((g) => g.id === id);
+    const stem = (name: string) => name.split(/[:\-–]/)[0].replace(/\s+(II|2|Part.*)$/i, '').trim().toLowerCase();
+    return self ? oldestFirst(DEMO_GAMES.filter((g) => stem(g.name) === stem(self.name)), id) : [];
+  }
+  if (demoScreenId(id)) {
+    const saga = DEMO_SCREEN.find((g) => g.id === id)?.saga;
+    return saga ? oldestFirst(DEMO_SCREEN.filter((g) => g.saga === saga), id) : [];
+  }
+  return [];
+}
+
+/** "Te puede gustar" for series & movies (TMDB recommendations; demo: same genre). */
+export async function similarItems(keys: Keys, id: string, signal?: AbortSignal): Promise<Game[]> {
+  const parts = id.split(':');
+  if (parts[0] === 'tmdb' && keys.tmdb) {
+    return (await tmdbRecommendations(keys.tmdb, kindOf(id)!, parts[2], signal)).filter((g) => g.id !== id).slice(0, 20);
+  }
+  if (demoScreenId(id)) {
+    const self = DEMO_SCREEN.find((g) => g.id === id);
+    return self ? DEMO_SCREEN.filter((g) => g.id !== id && g.genres.some((x) => self.genres.includes(x))).slice(0, 12) : [];
+  }
+  return [];
+}
+
+export async function discoverItems(
+  mode: Mode,
+  keys: Keys,
   filters: DiscoverFilters,
   page = 1,
   signal?: AbortSignal,
 ): Promise<{ games: Game[]; hasMore: boolean }> {
-  if (!key) return { games: page === 1 ? filterDemo(DEMO_GAMES, filters) : [], hasMore: false };
-  return rawgDiscover(key, toRawgQuery(filters), page, signal);
+  if (mode === 'games') {
+    if (!keys.rawg) return { games: page === 1 ? filterDemo(DEMO_GAMES, filters) : [], hasMore: false };
+    return rawgDiscover(keys.rawg, toRawgQuery(filters), page, signal);
+  }
+  if (!keys.tmdb) return { games: page === 1 ? filterDemoScreen(DEMO_SCREEN, filters) : [], hasMore: false };
+  const { path, params } = toTmdbQuery(filters);
+  return tmdbList(keys.tmdb, filters.kind, path, params, page, signal);
 }
 
-/**
- * Well-rated games from the user's favourite genres, skipping anything they
- * already rated or listed. Each genre is queried on its own and interleaved so
- * one dominant genre doesn't take over the row.
- */
-export async function recommendGames(
-  key: string,
-  genres: string[],
-  exclude: Set<string>,
-  signal?: AbortSignal,
-): Promise<Game[]> {
-  let batches: Game[][];
-  if (!key) {
-    batches = genres.map((name) => DEMO_GAMES.filter((g) => g.genres.includes(name)));
-  } else {
-    batches = await Promise.all(
-      genres.map((name) =>
-        rawgDiscover(key, { genres: genreSlug(name), ordering: '-metacritic', metacritic: '80,100' }, 1, signal).then(
-          (r) => r.games,
-        ),
-      ),
-    );
-  }
+/** Trending this week (series & movies mode). */
+export async function trendingItems(keys: Keys, signal?: AbortSignal): Promise<Game[]> {
+  return keys.tmdb ? tmdbTrending(keys.tmdb, signal) : DEMO_SCREEN.slice(0, 12);
+}
+
+/** Interleaves several result lists, skipping repeats and anything in `exclude`. */
+function interleave(batches: Game[][], exclude: Set<string>, max = 20): Game[] {
   const out: Game[] = [];
   const seen = new Set(exclude);
-  for (let i = 0; out.length < 20 && batches.some((b) => i < b.length); i++) {
+  for (let i = 0; out.length < max && batches.some((b) => i < b.length); i++) {
     for (const b of batches) {
       const g = b[i];
       if (g && !seen.has(g.id)) {
@@ -86,18 +136,33 @@ export async function recommendGames(
   return out;
 }
 
-/** Games of the same series, oldest first. The demo catalog matches by title prefix. */
-export async function seriesGames(key: string, id: string, signal?: AbortSignal): Promise<Game[]> {
-  const [source, ref] = id.split(':');
-  let games: Game[] = [];
-  if (source === 'rawg' && key) {
-    games = await rawgSeries(key, ref, signal);
-  } else if (source === 'demo') {
-    const self = DEMO_GAMES.find((g) => g.id === id);
-    const stem = (name: string) => name.split(/[:\-–]/)[0].replace(/\s+(II|2|Part.*)$/i, '').trim().toLowerCase();
-    if (self) games = DEMO_GAMES.filter((g) => g.id !== id && stem(g.name) === stem(self.name));
+/**
+ * "Para vos". Games: well-rated titles of the favourite genres. Series &
+ * movies: TMDB's own recommendations for the best-rated titles.
+ */
+export async function recommendItems(
+  mode: Mode,
+  keys: Keys,
+  taste: { genres: string[]; favourites: string[] },
+  exclude: Set<string>,
+  signal?: AbortSignal,
+): Promise<Game[]> {
+  if (mode === 'games') {
+    const batches = keys.rawg
+      ? await Promise.all(
+          taste.genres.map((name) =>
+            rawgDiscover(keys.rawg, { genres: genreSlug(name), ordering: '-metacritic', metacritic: '80,100' }, 1, signal).then((r) => r.games),
+          ),
+        )
+      : taste.genres.map((name) => DEMO_GAMES.filter((g) => g.genres.includes(name)));
+    return interleave(batches, exclude);
   }
-  return games
-    .filter((g) => g.id !== id)
-    .sort((a, b) => (a.released ?? '9999').localeCompare(b.released ?? '9999'));
+  const tmdbIds = taste.favourites.filter((id) => id.startsWith('tmdb:'));
+  if (keys.tmdb && tmdbIds.length) {
+    return interleave(await Promise.all(tmdbIds.map((id) => similarItems(keys, id, signal))), exclude);
+  }
+  return interleave(
+    taste.genres.map((name) => DEMO_SCREEN.filter((g) => g.genres.includes(name))),
+    exclude,
+  );
 }

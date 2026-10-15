@@ -5,6 +5,7 @@ services:
       args:
         # Se lee del archivo .env junto a este docker-compose.yml
         - VITE_RAWG_KEY=${VITE_RAWG_KEY:-}
+        - VITE_TMDB_KEY=${VITE_TMDB_KEY:-}
     ports:
       - "3030:80"
     depends_on:

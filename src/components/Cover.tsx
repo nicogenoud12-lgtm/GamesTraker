@@ -30,7 +30,7 @@ export default function Cover({ game, size = 420, className = '', showTitle = tr
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/40 via-surface-2 to-pink-500/30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-accent/40 via-surface-2 to-accent-2/30" />
       )}
       {generated && showTitle && (
         <div className="absolute inset-0 flex items-end p-2">

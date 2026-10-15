@@ -1,19 +1,22 @@
 import { NavLink } from 'react-router-dom';
-import { Compass, Gamepad2, House, ListOrdered, Search } from 'lucide-react';
+import { Compass, House, ListOrdered, Search } from 'lucide-react';
+import { MODES } from '../lib/mode';
+import { useMode } from '../store/useUi';
 
 const TABS = [
   { to: '/', label: 'Inicio', icon: House, end: true },
   { to: '/descubrir', label: 'Descubrir', icon: Compass, end: false },
   { to: '/buscar', label: 'Buscar', icon: Search, end: false },
   { to: '/listas', label: 'Listas', icon: ListOrdered, end: false },
-  { to: '/mis-juegos', label: 'Mis juegos', icon: Gamepad2, end: false },
 ];
 
 export default function TabBar() {
+  const mode = useMode();
+  const tabs = [...TABS, { to: '/mis-juegos', label: mode === 'games' ? 'Mis juegos' : 'Mis títulos', icon: MODES[mode].icon, end: false }];
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-bg/80 backdrop-blur-xl lg:hidden">
       <ul className="mx-auto flex max-w-lg">
-        {TABS.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, label, icon: Icon, end }) => (
           <li key={to} className="flex-1">
             <NavLink
               to={to}

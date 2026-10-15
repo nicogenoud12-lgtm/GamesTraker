@@ -26,7 +26,8 @@ import { ScoreBadge } from '../components/Score';
 import Sheet from '../components/Sheet';
 import { formatDate, playingDay, year } from '../lib/format';
 import type { Game } from '../lib/types';
-import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { MODES, listMode } from '../lib/mode';
 
 export default function ListDetail() {
   const { id = '' } = useParams();
@@ -60,7 +61,8 @@ export default function ListDetail() {
   }
 
   const items = list.gameIds.map((gid) => games[gid]).filter(Boolean);
-  const ranked = list.id === NEXT_LIST_ID;
+  const copy = MODES[listMode(list)];
+  const ranked = list.id === copy.nextListId;
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -96,7 +98,7 @@ export default function ListDetail() {
               {list.name}
             </h1>
             <p className="text-sm text-muted">
-              {items.length} {items.length === 1 ? 'juego' : 'juegos'}
+              {items.length} {items.length === 1 ? copy.item : copy.items}
               {items.length > 1 && ' · Mantené apretado y arrastrá para ordenar'}
             </p>
           </div>
@@ -108,7 +110,7 @@ export default function ListDetail() {
           <div className="mt-10 text-center">
             <p className="text-muted">Esta lista está vacía.</p>
             <Link to="/buscar" className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
-              <Plus size={18} /> Agregar juegos
+              <Plus size={18} /> Agregar {copy.items}
             </Link>
           </div>
         ) : (
@@ -121,7 +123,7 @@ export default function ListDetail() {
                     game={g}
                     index={i}
                     ranked={ranked}
-                    started={list.id === PLAYING_LIST_ID ? starts[g.id] : undefined}
+                    started={list.id === copy.nowListId ? starts[g.id] : undefined}
                     score={ratings[g.id]?.score}
                     onRemove={() => removeFromList(list.id, g.id)}
                   />
@@ -135,7 +137,7 @@ export default function ListDetail() {
             to="/buscar"
             className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-line py-3.5 text-sm text-muted"
           >
-            <Plus size={16} /> Agregar juegos
+            <Plus size={16} /> Agregar {copy.items}
           </Link>
         )}
       </div>

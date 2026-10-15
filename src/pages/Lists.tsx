@@ -9,12 +9,21 @@ import BounceCards from '../components/reactbits/BounceCards';
 import { resizeImage } from '../lib/rawg';
 import { useIsDesktop } from '../lib/useMedia';
 import type { Game, GameList } from '../lib/types';
-import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
+import { MODES, listMode, type Mode } from '../lib/mode';
 
-const ICON_IDS = Object.keys(LIST_ICONS);
+const SCREEN_ICONS = ['film', 'tv', 'popcorn', 'clapperboard', 'laugh', 'drama'];
+/** Each mode shows its own themed icons first. */
+const iconIds = (mode: Mode) => {
+  const all = Object.keys(LIST_ICONS);
+  return mode === 'screen' ? [...SCREEN_ICONS, ...all.filter((i) => !SCREEN_ICONS.includes(i))] : all.filter((i) => !SCREEN_ICONS.includes(i)).concat(SCREEN_ICONS);
+};
 
 export default function Lists() {
-  const lists = useStore((s) => s.lists);
+  const mode = useMode();
+  const ICON_IDS = iconIds(mode);
+  const lists = useStore((s) => s.lists).filter((l) => listMode(l) === mode);
   const games = useStore((s) => s.games);
   const createList = useStore((s) => s.createList);
   const [open, setOpen] = useState(false);
@@ -23,7 +32,7 @@ export default function Lists() {
 
   const create = () => {
     if (!name.trim()) return;
-    createList(name.trim(), icon);
+    createList(name.trim(), icon, mode);
     setName('');
     setIcon(ICON_IDS[0]);
     setOpen(false);
@@ -33,6 +42,7 @@ export default function Lists() {
     <div>
       <PageHeader
         title="Listas"
+        subtitle={MODES[mode].label}
         action={
           <button onClick={() => setOpen(true)} aria-label="Nueva lista" className="rounded-full bg-white p-2.5 text-black">
             <Plus size={20} />
@@ -112,8 +122,13 @@ function ListCard({ list, games }: { list: GameList; games: Record<string, Game>
   const isDesktop = useIsDesktop();
   // Narrower fan on phones so the list name fits on one line.
   const fan = isDesktop ? { width: 168, card: 86, spread: 20 } : { width: 140, card: 74, spread: 16 };
+  const copy = MODES[listMode(list)];
   const hint =
-    lead && list.id === NEXT_LIST_ID ? `Siguiente: ${lead.name}` : lead && list.id === PLAYING_LIST_ID ? `Jugando: ${lead.name}` : null;
+    lead && list.id === copy.nextListId
+      ? `Siguiente: ${lead.name}`
+      : lead && list.id === copy.nowListId
+        ? `${copy.doingActive}: ${lead.name}`
+        : null;
 
   return (
     <Link
@@ -127,7 +142,7 @@ function ListCard({ list, games }: { list: GameList; games: Record<string, Game>
           <ListIcon list={list} size="md" />
           <h2 className="mt-3 line-clamp-2 font-display text-xl leading-tight font-bold lg:text-2xl">{list.name}</h2>
           <p className="mt-1 text-sm text-muted">
-            {items.length === 0 ? 'Vacía' : `${items.length} ${items.length === 1 ? 'juego' : 'juegos'}`}
+            {items.length === 0 ? 'Vacía' : `${items.length} ${items.length === 1 ? copy.item : copy.items}`}
           </p>
           {hint && <p className="mt-2 truncate text-xs font-semibold text-accent">{hint}</p>}
         </div>

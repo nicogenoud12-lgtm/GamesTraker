@@ -9,6 +9,8 @@ import { daysBetween, formatHours, shortPlatforms } from '../lib/format';
 import { TIERS } from '../lib/tiers';
 import type { Game, Rating } from '../lib/types';
 import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
+import { kindOf, modeOf } from '../lib/mode';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -42,13 +44,14 @@ export default function Stats() {
   const [params, setParams] = useSearchParams();
   const games = useStore((s) => s.games);
   const ratings = useStore((s) => s.ratings);
+  const mode = useMode();
 
   const all = useMemo<Entry[]>(
     () =>
       Object.values(ratings)
-        .filter((r) => games[r.gameId])
+        .filter((r) => games[r.gameId] && modeOf(r.gameId) === mode)
         .map((r) => ({ game: games[r.gameId], rating: r, ...when(r) })),
-    [games, ratings],
+    [games, ratings, mode],
   );
   const years = [...new Set(all.map((e) => e.year))].sort((a, b) => b - a);
   const yearParam = Number(params.get('anio'));
@@ -60,7 +63,7 @@ export default function Stats() {
     return (
       <div>
         <Header onBack={() => navigate(-1)} />
-        <p className="mt-10 px-5 text-center text-muted">Puntuá algunos juegos y acá vas a ver tus estadísticas por año.</p>
+        <p className="mt-10 px-5 text-center text-muted">Puntuá {mode === 'games' ? 'algunos juegos' : 'algunas series o películas'} y acá vas a ver tus estadísticas por año.</p>
       </div>
     );
   }
@@ -98,9 +101,16 @@ export default function Stats() {
       </ScrollRow>
 
       <div className="grid grid-cols-2 gap-2 px-5 sm:grid-cols-4 lg:gap-4">
-        <Tile label={finished.length === 1 ? 'Terminado' : 'Terminados'} value={finished.length} />
+        <Tile
+          label={mode === 'games' ? (finished.length === 1 ? 'Terminado' : 'Terminados') : finished.length === 1 ? 'Vista' : 'Vistas'}
+          value={finished.length}
+        />
         <Tile label="Promedio" value={average(entries)} />
-        <Tile label="Horas jugadas" value={Math.round(totalHours)} />
+        {mode === 'games' ? (
+          <Tile label="Horas jugadas" value={Math.round(totalHours)} />
+        ) : (
+          <Tile label="Series" value={entries.filter((e) => kindOf(e.game.id) === 'tv').length} />
+        )}
         <Tile label="Históricos" value={entries.filter((e) => e.rating.tier === 'historico').length} />
       </div>
       {dropped > 0 && (
@@ -256,7 +266,7 @@ export default function Stats() {
       </Card>
 
       {platforms.length > 0 && (
-        <Card title="Plataformas">
+        <Card title={mode === 'games' ? 'Plataformas' : 'Dónde las viste'}>
           <RankBars rows={platforms} />
         </Card>
       )}

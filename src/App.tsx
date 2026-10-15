@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { startSync } from './lib/sync';
+import { useMode } from './store/useUi';
 import Sidebar from './components/Sidebar';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
@@ -19,6 +20,10 @@ import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
   useEffect(() => startSync(), []);
+  const mode = useMode();
+  useEffect(() => {
+    document.documentElement.dataset.mode = mode;
+  }, [mode]);
 
   return (
     <div className="min-h-dvh lg:pl-64">

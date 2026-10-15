@@ -3,9 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { KeyRound, Loader2, Search as SearchIcon, X } from 'lucide-react';
 import GameRow from '../components/GameRow';
 import { DEMO_GAMES } from '../data/demo';
-import { effectiveKey, popularGames, searchGames } from '../lib/catalog';
+import { DEMO_SCREEN } from '../data/demoScreen';
+import { keyFor, popularItems, searchItems, useKeys } from '../lib/catalog';
+import { MODES } from '../lib/mode';
 import type { Game } from '../lib/types';
-import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
 
 export default function Search() {
   const [params, setParams] = useSearchParams();
@@ -15,19 +17,24 @@ export default function Search() {
   const [popularError, setPopularError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const key = effectiveKey(useStore((s) => s.apiKey));
+  const mode = useMode();
+  const keys = useKeys();
+  const key = keyFor(mode, keys);
+  const copy = MODES[mode];
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
-    popularGames(key, ctrl.signal)
+    setPopular([]);
+    popularItems(mode, keys, ctrl.signal)
       .then((r) => {
         setPopular(r);
         setPopularError(null);
       })
       .catch((e: Error) => e.name !== 'AbortError' && setPopularError(e.message));
     return () => ctrl.abort();
-  }, [key]);
+    // keys is rebuilt each render; key covers the one this mode uses.
+  }, [key, mode]);
 
   useEffect(() => {
     const q = query.trim();
@@ -40,7 +47,7 @@ export default function Search() {
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       setLoading(true);
-      searchGames(key, q, ctrl.signal)
+      searchItems(mode, keys, q, ctrl.signal)
         .then((r) => {
           setResults(r);
           setError(null);
@@ -52,7 +59,7 @@ export default function Search() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [query, key, setParams]);
+  }, [query, key, mode, setParams]);
 
   const searching = query.trim().length >= 2;
 
@@ -66,7 +73,7 @@ export default function Search() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Zelda, Hades, Elden Ring…"
+            placeholder={copy.searchHint}
             className="h-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted/60"
             autoFocus
             enterKeyHint="search"
@@ -94,7 +101,7 @@ export default function Search() {
         >
           <KeyRound size={18} className="shrink-0 text-amber-300" />
           <span>
-            Modo demo con <b>{DEMO_GAMES.length} juegos</b>. Conectá la base de RAWG (gratis) para buscar entre +800.000 juegos con carátulas.
+            Modo demo con <b>{mode === 'games' ? `${DEMO_GAMES.length} juegos` : `${DEMO_SCREEN.length} títulos`}</b>. {copy.demoHint}
           </span>
         </Link>
       )}
@@ -118,7 +125,7 @@ export default function Search() {
         ) : (
           popular.length > 0 && (
             <>
-              <h2 className="mt-5 mb-1 font-display text-lg font-bold">{key ? 'Populares este año' : 'Para empezar'}</h2>
+              <h2 className="mt-5 mb-1 font-display text-lg font-bold">{!key ? 'Para empezar' : mode === 'games' ? 'Populares este año' : 'Tendencias de la semana'}</h2>
               <ul className="divide-y divide-white/5 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:divide-y-0">
                 {popular.map((g) => (
                   <GameRow key={g.id} game={g} />

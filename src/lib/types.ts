@@ -16,6 +16,11 @@ export interface Game {
   metacritic?: number | null;
 }
 
+export interface Provider {
+  name: string;
+  logo: string | null;
+}
+
 export interface GameDetail extends Game {
   description: string;
   developers: string[];
@@ -24,6 +29,16 @@ export interface GameDetail extends Game {
   playtime: number | null;
   website: string | null;
   screenshots: string[];
+  /** Label for `metacritic` when the score comes from elsewhere (e.g. "TMDB"). */
+  scoreLabel?: string;
+  /** Extra facts for the info grid (runtime, seasons…). */
+  facts?: { label: string; value: string }[];
+  /** Streaming services in Argentina. */
+  providers?: Provider[];
+  trailer?: string | null;
+  /** TMDB collection id, used for the "same saga" row of movies. */
+  collectionId?: number | null;
+  tagline?: string;
 }
 
 export interface Rating {
@@ -49,6 +64,8 @@ export interface GameList {
   emoji: string;
   gameIds: string[];
   system: boolean;
+  /** Which collection the list belongs to; missing means games. */
+  mode?: 'games' | 'screen';
   createdAt: number;
   /** Bumped on every change so devices can merge lists when syncing. */
   updatedAt: number;
