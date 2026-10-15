@@ -1,8 +1,9 @@
 import { useSync } from '../store/useSync';
 
-// Scores our own server looks up for a game, since browsers can't call these
-// services directly: the Metacritic Steam shows for the PC version (or, if
-// configured, IGDB's critics) and Steam users' reviews rated like SteamDB does.
+// Scores our own server looks up, since browsers can't get them directly: for
+// games, the Metacritic Steam shows for the PC version (or, if configured,
+// IGDB's critics) and Steam users' reviews rated like SteamDB does; for movies
+// and series, the IMDb rating from IMDb's daily public file.
 
 export interface CriticScore {
   score: number;
@@ -53,5 +54,28 @@ export async function gameScores(name: string, released: string | null, steamApp
     return value;
   } catch {
     return NONE;
+  }
+}
+
+export interface ImdbRating {
+  rating: number;
+  votes: number;
+  url: string;
+}
+
+const imdbCache = new Map<string, ImdbRating | null>();
+
+export async function imdbRating(id: string): Promise<ImdbRating | null> {
+  if (imdbCache.has(id)) return imdbCache.get(id)!;
+  try {
+    const res = await fetch(`/api/imdb?${new URLSearchParams({ id })}`);
+    // 503 while the server is still downloading IMDb's file: try again next time.
+    if (!res.ok) return null;
+    const { rating } = (await res.json()) as { rating: { rating: number; votes: number } | null };
+    const value = rating ? { ...rating, url: `https://www.imdb.com/title/${id}/` } : null;
+    imdbCache.set(id, value);
+    return value;
+  } catch {
+    return null;
   }
 }

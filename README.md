@@ -83,6 +83,13 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 - Si se edita en dos dispositivos a la vez, gana la edición más reciente de cada puntaje o lista, y lo
   borrado no vuelve a aparecer.
 
+### Puntaje de IMDb (series y pelis)
+
+IMDb no tiene una API gratis, pero publica todos los días un archivo con el puntaje y los votos de cada título
+([IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/), para uso personal y no
+comercial). El servidor lo baja al arrancar y una vez por día (~8 MB) y la ficha muestra "IMDb 8,7" usando el id
+de IMDb que trae TMDB. No hace falta configurar nada; con `IMDB=off` en el servicio `api` se desactiva.
+
 ### Nota de críticos (Steam / IGDB)
 
 RAWG no tiene la nota de Metacritic de muchos juegos. Para esos, el servidor la busca en la tienda de

@@ -1,7 +1,7 @@
 // GamesTraker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
-// critic-score lookup (Steam's Metacritic, optionally IGDB) that browsers
-// can't do themselves.
+// critic-score lookup (Steam's Metacritic, optionally IGDB) and IMDb ratings
+// (from IMDb's daily public file) that browsers can't do themselves.
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -10,6 +10,9 @@ import http from 'node:http';
 import { createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import readline from 'node:readline';
+import { Readable } from 'node:stream';
+import { createGunzip } from 'node:zlib';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb);
@@ -345,6 +348,70 @@ async function criticScore(name, year, steamId) {
   return value;
 }
 
+// ---------- IMDb ratings ----------
+// IMDb has no free API, but publishes every title's rating daily for personal,
+// non-commercial use. Kept as sorted typed arrays (~15 MB for ~1.6M titles).
+
+const IMDB_URL = process.env.IMDB_RATINGS_URL ?? 'https://datasets.imdbws.com/title.ratings.tsv.gz';
+let imdb = null;
+
+async function loadImdb() {
+  const res = await fetch(IMDB_URL);
+  if (!res.ok || !res.body) throw new Error(`IMDb respondió ${res.status}`);
+  let ids = new Uint32Array(2_000_000);
+  let ratings = new Uint8Array(ids.length);
+  let votes = new Uint32Array(ids.length);
+  let n = 0;
+  const lines = readline.createInterface({ input: Readable.fromWeb(res.body).pipe(createGunzip()), crlfDelay: Infinity });
+  for await (const line of lines) {
+    if (!line.startsWith('tt')) continue;
+    const [tconst, rating, numVotes] = line.split('\t');
+    if (n === ids.length) {
+      const grow = (a) => {
+        const b = new a.constructor(a.length * 2);
+        b.set(a);
+        return b;
+      };
+      [ids, ratings, votes] = [grow(ids), grow(ratings), grow(votes)];
+    }
+    ids[n] = Number(tconst.slice(2));
+    ratings[n] = Math.round(Number(rating) * 10);
+    votes[n] = Number(numVotes);
+    n++;
+  }
+  // The file is sorted as text ("tt10000000" before "tt1000001"); binary search needs numbers.
+  const order = new Uint32Array(n).map((_, i) => i).sort((a, b) => ids[a] - ids[b]);
+  imdb = {
+    ids: order.map((i) => ids[i]),
+    ratings: new Uint8Array(n).map((_, k) => ratings[order[k]]),
+    votes: new Uint32Array(n).map((_, k) => votes[order[k]]),
+  };
+  console.log(`IMDb: ${n} puntajes cargados`);
+}
+
+function refreshImdb() {
+  loadImdb()
+    .then(() => setTimeout(refreshImdb, 864e5))
+    .catch((e) => {
+      console.error(`IMDb: ${e.message}; reintento en una hora`);
+      setTimeout(refreshImdb, 36e5);
+    });
+}
+
+function imdbRating(tconst) {
+  const id = Number(/^tt(\d{1,10})$/.exec(tconst ?? '')?.[1]);
+  if (!imdb || !id) return null;
+  let lo = 0;
+  let hi = imdb.ids.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (imdb.ids[mid] === id) return { rating: imdb.ratings[mid] / 10, votes: imdb.votes[mid] };
+    if (imdb.ids[mid] < id) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return null;
+}
+
 // ---------- http ----------
 
 function send(res, status, body) {
@@ -390,6 +457,7 @@ async function handle(req, res) {
         hasUsers: users.length > 0,
         signupOpen: users.length === 0 || ALLOW_SIGNUP,
         igdb: igdbEnabled(),
+        imdb: imdb != null,
       });
     }
     case 'POST /api/auth/register':
@@ -435,6 +503,10 @@ async function handle(req, res) {
       const steam = url.searchParams.get('steam');
       return send(res, 200, await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null));
     }
+    case 'GET /api/imdb': {
+      if (!imdb) throw new HttpError(503, 'Los puntajes de IMDb todavía se están descargando');
+      return send(res, 200, { rating: imdbRating(url.searchParams.get('id')) });
+    }
     default:
       return send(res, 404, { error: 'Not found' });
   }
@@ -455,6 +527,8 @@ if (process.argv[2] === 'reset-password') {
     process.exit(1);
   }
 }
+
+if (process.env.IMDB !== 'off') refreshImdb();
 
 http
   .createServer((req, res) => {
