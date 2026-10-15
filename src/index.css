@@ -133,3 +133,27 @@ input[type='range'].score-range::-moz-range-thumb {
 @utility animate-pop {
   animation: pop-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
+
+/* Tapping a cover grows it into the detail page's cover (CoverTransition). */
+::view-transition-group(game-cover) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+::view-transition-old(game-cover),
+::view-transition-new(game-cover) {
+  /* Both covers keep their shape while the box grows; no squashing. */
+  height: 100%;
+  object-fit: cover;
+  overflow: clip;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

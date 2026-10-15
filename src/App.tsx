@@ -19,6 +19,7 @@ import Stats from './pages/Stats';
 import YearReview from './pages/YearReview';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
+import CoverTransition from './components/CoverTransition';
 
 export default function App() {
   useEffect(() => startSync(), []);
@@ -32,6 +33,7 @@ export default function App() {
   return (
     <div className="min-h-dvh lg:overflow-x-clip lg:pl-64">
       <ScrollToTop />
+      <CoverTransition />
       <Sidebar />
       <main className="mx-auto max-w-lg pb-28 lg:max-w-6xl lg:px-6 lg:pb-12 2xl:max-w-7xl">
         <Routes>
