@@ -7,7 +7,7 @@ import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
 import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/catalog';
-import { type Scores, gameScores } from '../lib/critics';
+import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/critics';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
@@ -100,6 +100,18 @@ export default function GamePage() {
   const critic = hasMetacritic ? null : scores?.critic;
   const steam = scores?.steam;
 
+  const [imdb, setImdb] = useState<ImdbRating | null>(null);
+  const imdbId = detail?.imdbId;
+  useEffect(() => {
+    setImdb(null);
+    if (!imdbId) return;
+    let alive = true;
+    imdbRating(imdbId).then((r) => alive && setImdb(r));
+    return () => {
+      alive = false;
+    };
+  }, [imdbId]);
+
   const game: Game | null = detail ?? snapshot ?? null;
 
   if (!game) {
@@ -178,6 +190,17 @@ export default function GamePage() {
           className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
         >
           {critic.source === 'metacritic' ? 'Metacritic' : 'Críticos'} {critic.score}
+        </a>
+      )}
+      {imdb && (
+        <a
+          href={imdb.url}
+          target="_blank"
+          rel="noreferrer"
+          title={`${imdb.votes.toLocaleString('es-AR')} votos en IMDb`}
+          className="rounded-full bg-yellow-400/15 px-2.5 py-1 text-xs font-semibold text-yellow-300"
+        >
+          IMDb {imdb.rating.toLocaleString('es-AR', { minimumFractionDigits: 1 })}
         </a>
       )}
       {steam && (
@@ -313,7 +336,7 @@ export default function GamePage() {
     </section>
   );
 
-  const info = detail && (detail.playtime || detail.publishers.length > 0 || detail.website || detail.facts?.length) && (
+  const info = detail && (detail.playtime || detail.publishers.length > 0 || detail.website || (detail.facts?.length ?? 0) > 0) && (
     <dl className="mt-7 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
       {detail.playtime && <Info label="Duración promedio" value={`${detail.playtime} h`} />}
       {detail.facts?.map((f) => <Info key={f.label} label={f.label} value={f.value} />)}

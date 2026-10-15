@@ -140,6 +140,8 @@ interface TmdbDetail extends TmdbItem {
   production_companies?: { name: string }[];
   belongs_to_collection?: { id: number } | null;
   homepage?: string;
+  imdb_id?: string | null;
+  external_ids?: { imdb_id?: string | null };
   credits?: { crew?: { job: string; name: string }[]; cast?: { name: string }[] };
   videos?: { results: { site: string; type: string; key: string; official?: boolean }[] };
   images?: { backdrops: { file_path: string }[] };
@@ -154,7 +156,7 @@ function duration(minutes: number): string {
 
 export async function tmdbDetail(key: string, kind: ScreenKind, id: string): Promise<GameDetail> {
   const d = await get<TmdbDetail>(key, `/${kind}/${id}`, {
-    append_to_response: 'credits,videos,images,watch/providers',
+    append_to_response: 'credits,videos,images,watch/providers,external_ids',
     include_image_language: 'null,es,en',
     include_video_language: 'es,en',
   });
@@ -194,5 +196,7 @@ export async function tmdbDetail(key: string, kind: ScreenKind, id: string): Pro
     providers,
     trailer: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
     collectionId: d.belongs_to_collection?.id ?? null,
+    // Movies have it at the top; series only under external_ids.
+    imdbId: d.imdb_id || d.external_ids?.imdb_id || null,
   };
 }
