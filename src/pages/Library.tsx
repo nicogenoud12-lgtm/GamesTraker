@@ -160,12 +160,12 @@ function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTi
       >
         <span className="text-2xl leading-none">{tier.emoji}</span>
         <span className="font-display text-[13px] leading-tight font-bold">{tier.label}</span>
-        <span className="text-[11px] font-semibold opacity-60">{entries.length}</span>
+        <span className="mt-1 rounded-full bg-black/15 px-2 py-0.5 font-display text-xs leading-none font-bold tabular-nums">{entries.length}</span>
       </button>
       {empty ? (
         <div className="flex flex-1 items-center px-4 text-sm text-muted">Nada todavía</div>
       ) : (
-        <ScrollRow className="flex min-w-0 flex-1 items-center gap-2 p-2">
+        <ScrollRow wrapperClassName="flex min-w-0 flex-1 items-center" className="flex w-full items-center gap-2 p-2">
           {entries.map(({ game, rating }) => (
             <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[66px] shrink-0 lg:w-[88px]" title={game.name}>
               <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
