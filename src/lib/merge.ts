@@ -11,6 +11,8 @@ export interface SyncData {
   starts?: Record<string, string>;
   /** When each start date was set, so an edited date wins over an older one. */
   startsAt?: Record<string, number>;
+  /** Yearly goals per mode ("games-2026" → 30 titles); the most recently set wins. */
+  goals?: Record<string, { target: number; updatedAt: number }>;
   /** API keys shared across devices; for each one, the most recently changed wins. */
   settings?: { apiKey: string; updatedAt: number; tmdbKey?: string; tmdbUpdatedAt?: number };
 }
@@ -65,8 +67,15 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
     ratingTombs,
     listTombs,
     ...mergeStarts(a, b),
+    goals: mergeGoals(a.goals ?? {}, b.goals ?? {}),
     settings,
   };
+}
+
+function mergeGoals(a: NonNullable<SyncData['goals']>, b: NonNullable<SyncData['goals']>): NonNullable<SyncData['goals']> {
+  const out = { ...a };
+  for (const [key, goal] of Object.entries(b)) out[key] = newest(out[key], goal)!;
+  return out;
 }
 
 /** Per game, the most recently set start date wins (dates from before edits existed count as oldest). */

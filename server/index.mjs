@@ -412,6 +412,32 @@ function imdbRating(tconst) {
   return null;
 }
 
+// ---------- covers for share images ----------
+// A canvas can only be exported if its images come from our own origin, so
+// covers for the share images are fetched through here. Only these hosts.
+
+const IMAGE_HOSTS = new Set(['media.rawg.io', 'image.tmdb.org']);
+const MAX_IMAGE = 8 * 1024 * 1024;
+
+async function proxyImage(res, raw) {
+  let target;
+  try {
+    target = new URL(raw ?? '');
+  } catch {
+    throw new HttpError(400, 'URL inválida');
+  }
+  if (target.protocol !== 'https:' || !IMAGE_HOSTS.has(target.hostname)) throw new HttpError(400, 'Origen no permitido');
+  const upstream = await fetch(target).catch(() => null);
+  // CDNs may redirect, but never off HTTPS.
+  if (upstream && new URL(upstream.url).protocol !== 'https:') throw new HttpError(502, 'No se pudo traer la imagen');
+  const type = upstream?.headers.get('content-type') ?? '';
+  if (!upstream?.ok || !type.startsWith('image/')) throw new HttpError(502, 'No se pudo traer la imagen');
+  const body = Buffer.from(await upstream.arrayBuffer());
+  if (body.length > MAX_IMAGE) throw new HttpError(502, 'Imagen demasiado grande');
+  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=604800, immutable' });
+  res.end(body);
+}
+
 // ---------- http ----------
 
 function send(res, status, body) {
@@ -503,6 +529,8 @@ async function handle(req, res) {
       const steam = url.searchParams.get('steam');
       return send(res, 200, await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null));
     }
+    case 'GET /api/img':
+      return proxyImage(res, url.searchParams.get('url'));
     case 'GET /api/imdb': {
       if (!imdb) throw new HttpError(503, 'Los puntajes de IMDb todavía se están descargando');
       return send(res, 200, { rating: imdbRating(url.searchParams.get('id')) });

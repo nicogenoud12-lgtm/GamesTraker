@@ -36,6 +36,8 @@ interface State {
   starts: Record<string, string>;
   /** When each start date was set (for syncing edits). */
   startsAt: Record<string, number>;
+  /** Yearly goals: "games-2026" → how many titles to finish. */
+  goals: Record<string, { target: number; updatedAt: number }>;
   /** Local snapshots of every game the user has rated or listed. */
   games: Record<string, Game>;
   ratings: Record<string, Rating>;
@@ -48,6 +50,7 @@ interface State {
   setTmdbKey: (key: string) => void;
   /** Changes the day a game/series was started (YYYY-MM-DD). */
   setStart: (gameId: string, date: string) => void;
+  setGoal: (key: string, target: number) => void;
   rememberGame: (game: Game) => void;
   saveRating: (game: Game, rating: Omit<Rating, 'gameId' | 'createdAt' | 'updatedAt'>) => void;
   deleteRating: (gameId: string) => void;
@@ -81,6 +84,7 @@ export const useStore = create<State>()(
       tmdbKeyUpdatedAt: 0,
       starts: {},
       startsAt: {},
+      goals: {},
       games: {},
       ratings: {},
       lists: SYSTEM_LISTS,
@@ -89,6 +93,7 @@ export const useStore = create<State>()(
 
       setApiKey: (apiKey) => set({ apiKey, apiKeyUpdatedAt: Date.now() }),
       setTmdbKey: (tmdbKey) => set({ tmdbKey, tmdbKeyUpdatedAt: Date.now() }),
+      setGoal: (key, target) => set((s) => ({ goals: { ...s.goals, [key]: { target, updatedAt: Date.now() } } })),
       setStart: (gameId, date) =>
         set((s) => ({ starts: { ...s.starts, [gameId]: date }, startsAt: { ...s.startsAt, [gameId]: Date.now() } })),
 

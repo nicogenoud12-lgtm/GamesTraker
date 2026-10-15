@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Star, Youtube } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Share2, Star, Youtube } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
 import RatingSheet from '../components/RatingSheet';
 import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
 import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/catalog';
+import ShareSheet from '../components/ShareSheet';
 import StartDate from '../components/StartDate';
+import { ratingCard } from '../lib/cards';
+import { slug } from '../lib/shareImage';
 import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/critics';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
@@ -40,6 +43,7 @@ export default function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [series, setSeries] = useState<Game[] | null>(null);
   const [similar, setSimilar] = useState<Game[]>([]);
@@ -282,6 +286,14 @@ export default function GamePage() {
       >
         <ListPlus size={16} /> {inLists.length ? `En ${inLists.length} lista${inLists.length > 1 ? 's' : ''}` : 'A una lista'}
       </button>
+      {rating && (
+        <button
+          onClick={() => setShareOpen(true)}
+          className="col-span-2 flex items-center justify-center gap-2 rounded-2xl border border-line bg-surface py-2.5 text-sm font-semibold transition hover:border-white/20"
+        >
+          <Share2 size={16} /> Compartir mi puntaje
+        </button>
+      )}
       {playing && (
         <div className="col-span-2 -mt-2">
           <StartDate gameId={game.id} label={mode === 'games' ? 'Lo empezaste el' : 'La empezaste el'} />
@@ -387,6 +399,15 @@ export default function GamePage() {
     <>
       <RatingSheet game={game} open={rateOpen} onClose={() => setRateOpen(false)} avgHours={detail?.playtime} />
       <ListPickerSheet game={game} open={listOpen} onClose={() => setListOpen(false)} />
+      {rating && (
+        <ShareSheet
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          title="Compartir mi puntaje"
+          filename={`${slug(game.name)}-${rating.score}.png`}
+          render={() => ratingCard(game, rating, mode)}
+        />
+      )}
     </>
   );
 
