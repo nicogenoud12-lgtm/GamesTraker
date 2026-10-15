@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, RefreshCw, Upload } from 'lucide-react';
-import { syncNow, testToken } from '../lib/sync';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, LogIn, RefreshCw, Upload } from 'lucide-react';
+import { changePassword, syncNow } from '../lib/sync';
 import { useSync } from '../store/useSync';
 import { hasEnvKey } from '../lib/catalog';
 import { rawgSearch } from '../lib/rawg';
@@ -68,6 +68,8 @@ export default function Settings() {
       </header>
 
       <div className="space-y-4 px-5 lg:max-w-2xl">
+        <SyncSection />
+
         <section className="rounded-3xl border border-line bg-surface p-5">
           <div className="flex items-center gap-2">
             <KeyRound size={18} className="text-accent" />
@@ -109,8 +111,6 @@ export default function Settings() {
           )}
         </section>
 
-        <SyncSection />
-
         <section className="rounded-3xl border border-line bg-surface p-5">
           <h2 className="font-display text-lg font-bold">Tus datos</h2>
           <p className="mt-2 text-sm text-muted">
@@ -149,23 +149,25 @@ export default function Settings() {
 }
 
 function SyncSection() {
-  const { token, status, error, lastSyncAt, setToken } = useSync();
+  const { token, username, status, error, lastSyncAt, server, logout } = useSync();
   const toast = useToast((s) => s.show);
-  const [draft, setDraft] = useState('');
-  const [testing, setTesting] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const connect = async () => {
-    if (!draft.trim()) return;
-    setTesting(true);
+  const savePassword = async () => {
+    setBusy(true);
     try {
-      await testToken(draft);
-      setToken(draft);
-      setDraft('');
-      toast('Sincronización activada');
+      await changePassword(current, next);
+      toast('Contraseña cambiada. Los otros dispositivos van a pedir iniciar sesión de nuevo.');
+      setChanging(false);
+      setCurrent('');
+      setNext('');
     } catch (e) {
       toast((e as Error).message);
     } finally {
-      setTesting(false);
+      setBusy(false);
     }
   };
 
@@ -173,12 +175,13 @@ function SyncSection() {
     <section className="rounded-3xl border border-line bg-surface p-5">
       <div className="flex items-center gap-2">
         <Cloud size={18} className="text-accent" />
-        <h2 className="font-display text-lg font-bold">Sincronizar dispositivos</h2>
+        <h2 className="font-display text-lg font-bold">Cuenta y sincronización</h2>
       </div>
       {token ? (
         <>
           <p className="mt-2 text-sm text-muted">
-            Tus puntajes y listas se guardan en tu servidor y se comparten con los dispositivos que tengan el mismo código.
+            Sesión iniciada como <span className="font-semibold text-white">{username}</span>. Tus puntajes y listas se
+            sincronizan solos con todos los dispositivos donde entres con esta cuenta.
           </p>
           <p className={`mt-3 flex items-center gap-1.5 text-sm ${status === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
             {status === 'syncing' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
@@ -195,39 +198,65 @@ function SyncSection() {
             >
               <RefreshCw size={16} /> Sincronizar ahora
             </button>
-            <button
-              onClick={() => {
-                if (confirm('¿Desconectar este dispositivo? Tus datos quedan acá y en el servidor.')) setToken('');
-              }}
-              className="rounded-2xl bg-surface-2 py-3 text-sm font-semibold text-muted"
-            >
-              Desconectar
+            <button onClick={() => setChanging(!changing)} className="rounded-2xl bg-surface-2 py-3 text-sm font-semibold">
+              Cambiar contraseña
             </button>
           </div>
+          {changing && (
+            <div className="mt-3 space-y-2">
+              <input
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                placeholder="Contraseña actual"
+                autoComplete="current-password"
+                className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3 text-sm placeholder:text-muted/60"
+              />
+              <input
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                placeholder="Contraseña nueva (mínimo 8)"
+                autoComplete="new-password"
+                className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3 text-sm placeholder:text-muted/60"
+              />
+              <button
+                onClick={savePassword}
+                disabled={busy || !current || next.length < 8}
+                className="w-full rounded-2xl bg-white py-3 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                Guardar contraseña
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              if (confirm('¿Cerrar sesión en este dispositivo? Tus datos quedan acá y en tu cuenta.')) logout();
+            }}
+            className="mt-3 w-full rounded-2xl py-2.5 text-sm font-semibold text-muted hover:text-white"
+          >
+            Cerrar sesión
+          </button>
         </>
       ) : (
         <>
           <p className="mt-2 text-sm text-muted">
-            Pegá el código de sincronización (el <code className="text-white/80">SYNC_TOKEN</code> del servidor) para tener
-            los mismos juegos en el celu y en la compu. Hacelo una vez en cada dispositivo.
+            {error ? (
+              <span className="text-rose-400">{error}. </span>
+            ) : null}
+            Entrá con tu usuario y contraseña para tener los mismos juegos en el celu y en la compu. Lo hacés una vez
+            en cada dispositivo y queda recordado.
           </p>
-          <div className="mt-4 flex gap-2">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Código de sincronización"
-              type="password"
-              autoComplete="off"
-              className="min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-4 py-3 font-mono text-sm placeholder:font-sans placeholder:text-muted/60"
-            />
-            <button
-              onClick={connect}
-              disabled={testing || !draft.trim()}
-              className="flex items-center rounded-2xl bg-white px-4 font-semibold text-black disabled:opacity-50"
+          {server ? (
+            <Link
+              to="/cuenta"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3 font-semibold text-black"
             >
-              {testing ? <Loader2 size={18} className="animate-spin" /> : 'Conectar'}
-            </button>
-          </div>
+              <LogIn size={18} /> {server.hasUsers ? 'Iniciar sesión' : 'Crear mi cuenta'}
+            </Link>
+          ) : (
+            <p className="mt-3 text-xs text-muted">Disponible cuando la app corre en tu servidor.</p>
+          )}
         </>
       )}
     </section>

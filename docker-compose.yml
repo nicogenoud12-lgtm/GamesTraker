@@ -11,11 +11,12 @@ services:
       - api
     restart: unless-stopped
 
-  # Guarda puntajes y listas para sincronizar entre dispositivos.
+  # Cuentas (usuario y contraseña) y los datos de cada una para sincronizar.
   api:
     build: ./server
     environment:
-      - SYNC_TOKEN=${SYNC_TOKEN:-}
+      # Con "true" se pueden crear más cuentas además de la primera.
+      - ALLOW_SIGNUP=${ALLOW_SIGNUP:-false}
     volumes:
       - gamestraker_data:/data
     restart: unless-stopped
