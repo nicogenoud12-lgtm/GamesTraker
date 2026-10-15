@@ -7,6 +7,7 @@ import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
 import { ScoreRing, TierChip } from '../components/Score';
 import { itemDetail, keyFor, sagaItems, similarItems, useKeys } from '../lib/catalog';
+import StartDate from '../components/StartDate';
 import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/critics';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
@@ -281,6 +282,11 @@ export default function GamePage() {
       >
         <ListPlus size={16} /> {inLists.length ? `En ${inLists.length} lista${inLists.length > 1 ? 's' : ''}` : 'A una lista'}
       </button>
+      {playing && (
+        <div className="col-span-2 -mt-2">
+          <StartDate gameId={game.id} label={mode === 'games' ? 'Lo empezaste el' : 'La empezaste el'} />
+        </div>
+      )}
     </div>
   );
 

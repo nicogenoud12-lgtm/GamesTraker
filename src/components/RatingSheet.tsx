@@ -4,7 +4,7 @@ import Sheet from './Sheet';
 import { TIERS, TIER_BY_ID, tierForScore } from '../lib/tiers';
 import { STREAMING, kindOf, statusOptions } from '../lib/mode';
 import type { Game, PlayStatus, Replay, TierId } from '../lib/types';
-import { daysBetween } from '../lib/format';
+import { daysBetween, localDay } from '../lib/format';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 
@@ -28,7 +28,7 @@ function parseHours(text: string): number | null {
   return text.trim() && Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDay();
 
 export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
   const existing = useStore((s) => s.ratings[game.id]);

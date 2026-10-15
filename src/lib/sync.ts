@@ -22,7 +22,7 @@ export class ApiError extends Error {
 }
 
 function pick(): SyncData {
-  const { games, ratings, lists, ratingTombs, listTombs, starts, apiKey, apiKeyUpdatedAt, tmdbKey, tmdbKeyUpdatedAt } =
+  const { games, ratings, lists, ratingTombs, listTombs, starts, startsAt, apiKey, apiKeyUpdatedAt, tmdbKey, tmdbKeyUpdatedAt } =
     useStore.getState();
   return {
     games,
@@ -31,6 +31,7 @@ function pick(): SyncData {
     ratingTombs,
     listTombs,
     starts,
+    startsAt,
     settings: { apiKey, updatedAt: apiKeyUpdatedAt, tmdbKey, tmdbUpdatedAt: tmdbKeyUpdatedAt },
   };
 }
@@ -41,6 +42,7 @@ function apply(data: SyncData) {
   useStore.setState({
     ...rest,
     starts: rest.starts ?? {},
+    startsAt: rest.startsAt ?? {},
     ...(settings
       ? {
           apiKey: settings.apiKey,
@@ -167,6 +169,7 @@ export function startSync(): () => void {
       s.lists !== prev.lists ||
       s.games !== prev.games ||
       s.starts !== prev.starts ||
+      s.startsAt !== prev.startsAt ||
       s.apiKey !== prev.apiKey ||
       s.tmdbKey !== prev.tmdbKey
     ) {

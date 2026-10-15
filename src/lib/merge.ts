@@ -9,6 +9,8 @@ export interface SyncData {
   listTombs: Record<string, number>;
   /** Start dates per game; missing in documents saved by older versions. */
   starts?: Record<string, string>;
+  /** When each start date was set, so an edited date wins over an older one. */
+  startsAt?: Record<string, number>;
   /** API keys shared across devices; for each one, the most recently changed wins. */
   settings?: { apiKey: string; updatedAt: number; tmdbKey?: string; tmdbUpdatedAt?: number };
 }
@@ -62,9 +64,23 @@ export function mergeData(a: SyncData, b: SyncData): SyncData {
     lists,
     ratingTombs,
     listTombs,
-    starts: { ...(b.starts ?? {}), ...(a.starts ?? {}) },
+    ...mergeStarts(a, b),
     settings,
   };
+}
+
+/** Per game, the most recently set start date wins (dates from before edits existed count as oldest). */
+function mergeStarts(a: SyncData, b: SyncData): Pick<SyncData, 'starts' | 'startsAt'> {
+  const starts: Record<string, string> = {};
+  const startsAt: Record<string, number> = {};
+  for (const id of new Set([...Object.keys(a.starts ?? {}), ...Object.keys(b.starts ?? {})])) {
+    const ta = a.starts?.[id] ? (a.startsAt?.[id] ?? 0) : -1;
+    const tb = b.starts?.[id] ? (b.startsAt?.[id] ?? 0) : -1;
+    const from = tb > ta ? b : a;
+    starts[id] = from.starts![id];
+    if (from.startsAt?.[id]) startsAt[id] = from.startsAt[id];
+  }
+  return { starts, startsAt };
 }
 
 /** JSON with sorted keys, so equal data always serialises the same way. */

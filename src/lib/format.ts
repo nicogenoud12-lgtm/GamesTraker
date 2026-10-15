@@ -1,3 +1,8 @@
+/** Today (YYYY-MM-DD) in the device's time zone; toISOString would already be tomorrow late at night in Argentina. */
+export function localDay(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function year(released: string | null): string {
   return released ? released.slice(0, 4) : '';
 }
@@ -47,7 +52,6 @@ export function formatHours(h: number): string {
 /** "Día 5" for a game started on `start` (YYYY-MM-DD), counting today. */
 export function playingDay(start: string | undefined): string | null {
   if (!start) return null;
-  const today = new Date().toISOString().slice(0, 10);
-  const n = daysBetween(start, today) + 1;
+  const n = daysBetween(start, localDay()) + 1;
   return n >= 1 ? `Día ${n}` : null;
 }

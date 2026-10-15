@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   DndContext,
   KeyboardSensor,
@@ -19,12 +19,16 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowLeft, GripVertical, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Dices, GripVertical, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import Cover from '../components/Cover';
 import ListIcon, { LIST_ICONS, iconFor } from '../components/ListIcon';
 import { ScoreBadge } from '../components/Score';
 import Sheet from '../components/Sheet';
-import { formatDate, playingDay, year } from '../lib/format';
+import Roulette from '../components/Roulette';
+import StartDate from '../components/StartDate';
+import { useKeys } from '../lib/catalog';
+import { formatHours, useHours } from '../lib/durations';
+import { year } from '../lib/format';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { MODES, listMode } from '../lib/mode';
@@ -42,6 +46,10 @@ export default function ListDetail() {
   const deleteList = useStore((s) => s.deleteList);
   const [menuOpen, setMenuOpen] = useState(false);
   const [name, setName] = useState('');
+  const [params, setParams] = useSearchParams();
+  const rouletteOpen = params.get('ruleta') === '1';
+  const keys = useKeys();
+  const hours = useHours(keys, list?.gameIds ?? []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -63,6 +71,7 @@ export default function ListDetail() {
   const items = list.gameIds.map((gid) => games[gid]).filter(Boolean);
   const copy = MODES[listMode(list)];
   const ranked = list.id === copy.nextListId;
+  const total = items.reduce((sum, g) => sum + (hours[g.id] ?? 0), 0);
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -99,11 +108,29 @@ export default function ListDetail() {
             </h1>
             <p className="text-sm text-muted">
               {items.length} {items.length === 1 ? copy.item : copy.items}
+              {total > 0 && ` · ≈ ${formatHours(total)} en total`}
               {items.length > 1 && ' · Mantené apretado y arrastrá para ordenar'}
             </p>
           </div>
         </div>
+        {ranked && items.length >= 2 && (
+          <button
+            onClick={() => setParams({ ruleta: '1' }, { replace: true })}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 py-2.5 text-sm font-semibold text-accent"
+          >
+            <Dices size={18} /> {listMode(list) === 'games' ? '¿Qué juego hago ahora?' : '¿Qué veo ahora?'}
+          </button>
+        )}
       </header>
+      {ranked && (
+        <Roulette
+          open={rouletteOpen}
+          onClose={() => setParams({}, { replace: true })}
+          mode={listMode(list)}
+          games={items}
+          hours={hours}
+        />
+      )}
 
       <div className="px-4">
         {items.length === 0 ? (
@@ -123,7 +150,8 @@ export default function ListDetail() {
                     game={g}
                     index={i}
                     ranked={ranked}
-                    started={list.id === copy.nowListId ? starts[g.id] : undefined}
+                    started={list.id === copy.nowListId ? (starts[g.id] ?? '') : undefined}
+                    hours={hours[g.id] ?? null}
                     score={ratings[g.id]?.score}
                     onRemove={() => removeFromList(list.id, g.id)}
                   />
@@ -193,10 +221,11 @@ interface ItemProps {
   /** Start date, shown for games in "Jugando ahora". */
   started?: string;
   score: number | undefined;
+  hours: number | null;
   onRemove: () => void;
 }
 
-function SortableItem({ game, index, ranked, started, score, onRemove }: ItemProps) {
+function SortableItem({ game, index, ranked, started, score, hours, onRemove }: ItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: game.id });
   const first = ranked && index === 0;
 
@@ -211,19 +240,22 @@ function SortableItem({ game, index, ranked, started, score, onRemove }: ItemPro
       >
         {index + 1}
       </span>
-      <Link to={`/juego/${encodeURIComponent(game.id)}`} className="flex min-w-0 flex-1 items-center gap-3">
-        <Cover game={game} showTitle={false} className="h-16 w-12 shrink-0 rounded-lg" />
+      {/* Only the cover and name link to the page, so the start date can be edited in place. */}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Link to={`/juego/${encodeURIComponent(game.id)}`} className="shrink-0">
+          <Cover game={game} showTitle={false} className="h-16 w-12 rounded-lg" />
+        </Link>
         <div className="min-w-0">
           {first && <p className="text-[10px] font-bold tracking-widest text-accent uppercase">Siguiente</p>}
-          <p className="truncate font-semibold">{game.name}</p>
-          {started && (
-            <p className="truncate text-xs text-emerald-300">
-              {playingDay(started)} · desde {formatDate(started)}
-            </p>
-          )}
-          <p className="truncate text-xs text-muted">{[year(game.released), game.genres[0]].filter(Boolean).join(' · ')}</p>
+          <Link to={`/juego/${encodeURIComponent(game.id)}`} className="block truncate font-semibold">
+            {game.name}
+          </Link>
+          {started !== undefined && <StartDate gameId={game.id} label="Fecha en que empezaste" compact />}
+          <p className="truncate text-xs text-muted">
+            {[year(game.released), game.genres[0], hours ? `≈ ${formatHours(hours)}` : null].filter(Boolean).join(' · ')}
+          </p>
         </div>
-      </Link>
+      </div>
       {score != null && <ScoreBadge score={score} />}
       <button onClick={onRemove} aria-label={`Quitar ${game.name}`} className="p-2 text-muted/70 hover:text-rose-400">
         <X size={18} />
