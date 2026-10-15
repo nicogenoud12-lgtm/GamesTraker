@@ -19,7 +19,7 @@ jobs:
           docker run -d --name api -p 8787:8787 gamestraker-api
           for i in $(seq 1 20); do curl -sf localhost:8787/api/health && break; sleep 1; done
           TOKEN=$(curl -sf -H 'Content-Type: application/json' \
-            -d '{"username":"ci","password":"clave-de-prueba"}' localhost:8787/api/auth/register | jq -r .token)
+            -d '{"username":"ci-test","password":"clave-de-prueba"}' localhost:8787/api/auth/register | jq -r .token)
           curl -sf -H "Authorization: Bearer $TOKEN" -X PUT \
             -d '{"baseVersion":0,"data":{"games":{},"ratings":{},"lists":[]}}' localhost:8787/api/state
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/state | grep -q '"version":1'
