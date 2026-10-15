@@ -26,10 +26,10 @@ export default function App() {
   }, [mode]);
 
   return (
-    <div className="min-h-dvh lg:pl-64">
+    <div className="min-h-dvh lg:overflow-x-clip lg:pl-64">
       <ScrollToTop />
       <Sidebar />
-      <main className="mx-auto max-w-lg pb-28 lg:max-w-6xl lg:px-6 lg:pb-12">
+      <main className="mx-auto max-w-lg pb-28 lg:max-w-6xl lg:px-6 lg:pb-12 2xl:max-w-7xl">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/descubrir" element={<Discover />} />
