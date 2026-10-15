@@ -61,13 +61,13 @@ export default function Settings() {
   return (
     <div>
       <header className="pt-safe px-4">
-        <button onClick={() => navigate(-1)} aria-label="Volver" className="mt-4 rounded-full bg-white/5 p-2.5">
+        <button onClick={() => navigate(-1)} aria-label="Volver" className="mt-4 rounded-full bg-white/5 p-2.5 lg:hidden">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="mt-3 px-1 pb-4 font-display text-3xl font-bold tracking-tight">Ajustes</h1>
+        <h1 className="mt-3 px-1 pb-4 font-display text-3xl font-bold tracking-tight lg:text-4xl">Ajustes</h1>
       </header>
 
-      <div className="space-y-4 px-5">
+      <div className="space-y-4 px-5 lg:max-w-2xl">
         <section className="rounded-3xl border border-line bg-surface p-5">
           <div className="flex items-center gap-2">
             <KeyRound size={18} className="text-accent" />

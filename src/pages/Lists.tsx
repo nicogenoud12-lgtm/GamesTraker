@@ -37,7 +37,7 @@ export default function Lists() {
           </button>
         }
       />
-      <ul className="space-y-3 px-5">
+      <ul className="space-y-3 px-5 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
         {lists.map((l) => (
           <li key={l.id}>
             <ListCard list={l} games={games} />

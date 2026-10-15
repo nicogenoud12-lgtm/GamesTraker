@@ -9,9 +9,9 @@ export default function GameCard({ game }: { game: Game }) {
   const rating = useStore((s) => s.ratings[game.id]);
   const rememberGame = useStore((s) => s.rememberGame);
   return (
-    <Link to={`/juego/${encodeURIComponent(game.id)}`} onClick={() => rememberGame(game)} className="block w-32 shrink-0">
+    <Link to={`/juego/${encodeURIComponent(game.id)}`} onClick={() => rememberGame(game)} className="group block w-32 shrink-0 lg:w-40">
       <div className="relative">
-        <Cover game={game} className="aspect-[3/4] rounded-2xl text-xs" />
+        <Cover game={game} className="aspect-[3/4] rounded-2xl text-xs transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl" />
         {rating ? (
           <span className="absolute top-1.5 right-1.5 rounded-lg bg-black/75 backdrop-blur">
             <ScoreBadge score={rating.score} />
@@ -32,7 +32,7 @@ export default function GameCard({ game }: { game: Game }) {
 
 export function GameCardSkeleton() {
   return (
-    <div className="w-32 shrink-0 animate-pulse">
+    <div className="w-32 shrink-0 animate-pulse lg:w-40">
       <div className="aspect-[3/4] rounded-2xl bg-surface-2" />
       <div className="mt-2 h-3 w-24 rounded bg-surface-2" />
       <div className="mt-1.5 h-2.5 w-16 rounded bg-surface-2" />

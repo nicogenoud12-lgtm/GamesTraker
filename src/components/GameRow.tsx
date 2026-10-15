@@ -26,7 +26,7 @@ export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
   };
 
   return (
-    <li className="flex items-center gap-3 py-2">
+    <li className="flex items-center gap-3 py-2 lg:-mx-2 lg:rounded-xl lg:px-2 lg:transition lg:hover:bg-white/[0.03]">
       {rank != null && (
         <span className="-mr-1 w-6 shrink-0 text-center font-display text-sm font-bold text-muted tabular-nums">{rank}</span>
       )}

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import GameRow from '../components/GameRow';
 import ScrollRow from '../components/ScrollRow';
+import { useIsDesktop } from '../lib/useMedia';
 import { discoverGames, effectiveKey } from '../lib/catalog';
 import { type DiscoverFilters, GENRES, ORDERS, PERIODS, PLATFORMS, filtersFromParams, filtersToParams } from '../lib/discover';
 import type { Game } from '../lib/types';
@@ -42,15 +43,15 @@ export default function Explore() {
   };
 
   return (
-    <div>
-      <header className="pt-safe sticky top-0 z-30 bg-bg/90 backdrop-blur-xl">
-        <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+    <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:pt-8">
+      <header className="pt-safe sticky top-0 z-30 bg-bg/90 backdrop-blur-xl lg:top-6 lg:self-start lg:bg-transparent lg:pt-0 lg:backdrop-blur-none">
+        <div className="flex items-center gap-3 px-4 pt-4 pb-2 lg:pt-0 lg:pb-4">
           <button onClick={() => navigate(-1)} aria-label="Volver" className="rounded-full bg-white/5 p-2.5">
             <ArrowLeft size={20} />
           </button>
           <h1 className="font-display text-2xl font-bold tracking-tight">Explorar</h1>
         </div>
-        <div className="space-y-2 pb-3">
+        <div className="space-y-2 pb-3 lg:space-y-5">
           <ChipRow label="Período">
             {PERIODS.map((p) => (
               <Chip key={p.id} active={filters.period === p.id} onClick={() => update({ period: p.id })}>
@@ -88,12 +89,12 @@ export default function Explore() {
         </div>
       </header>
 
-      <div className="px-5">
+      <div className="px-5 lg:px-0">
         {error && <p className="mt-6 text-center text-sm text-rose-400">{error}</p>}
         {!loading && !error && games.length === 0 && (
           <p className="mt-10 text-center text-muted">No hay juegos con estos filtros.</p>
         )}
-        <ul className="divide-y divide-white/5">
+        <ul className="divide-y divide-white/5 xl:grid xl:grid-cols-2 xl:gap-x-8 xl:divide-y-0">
           {games.map((g, i) => (
             <GameRow key={g.id} game={g} rank={filters.order === 'best' ? i + 1 : undefined} />
           ))}
@@ -116,7 +117,17 @@ export default function Explore() {
   );
 }
 
+/** A scrolling row on phones; a wrapped block with its label on top on desktop. */
 function ChipRow({ label, children }: { label: string; children: ReactNode }) {
+  const isDesktop = useIsDesktop();
+  if (isDesktop) {
+    return (
+      <div className="px-4">
+        <p className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{label}</p>
+        <div className="flex flex-wrap gap-1.5">{children}</div>
+      </div>
+    );
+  }
   return (
     <ScrollRow className="flex items-center gap-2 px-5">
       <span className="w-20 shrink-0 text-xs font-semibold tracking-wide text-muted uppercase">{label}</span>
@@ -129,7 +140,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${active ? 'border-accent bg-accent/20 text-accent' : 'border-line text-muted'}`}
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${active ? 'border-accent bg-accent/20 text-accent' : 'border-line text-muted hover:border-white/20 hover:text-white'}`}
     >
       {children}
     </button>

@@ -69,7 +69,7 @@ export default function ListDetail() {
 
   return (
     <div>
-      <header className="pt-safe sticky top-0 z-30 bg-bg/85 px-4 backdrop-blur-xl">
+      <header className="pt-safe sticky top-0 z-30 bg-bg/85 px-4 backdrop-blur-xl lg:pt-6">
         <div className="flex items-center justify-between pt-4 pb-2">
           <button onClick={() => navigate('/listas')} aria-label="Volver" className="rounded-full bg-white/5 p-2.5">
             <ArrowLeft size={20} />
