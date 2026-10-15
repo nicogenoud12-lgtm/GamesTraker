@@ -15,6 +15,8 @@ import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/cri
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
+import { COVER_TRANSITION } from '../components/CoverTransition';
+import { useCoverTint } from '../lib/tint';
 import { useIsDesktop } from '../lib/useMedia';
 import { resizeImage } from '../lib/rawg';
 import { daysBetween, formatDate, formatHours, year } from '../lib/format';
@@ -48,6 +50,7 @@ export default function GamePage() {
   const [series, setSeries] = useState<Game[] | null>(null);
   const [similar, setSimilar] = useState<Game[]>([]);
   const isDesktop = useIsDesktop();
+  const tint = useCoverTint(detail ?? snapshot ?? null);
 
   // Opening a movie from the games side (or a game from the movies side) switches the app to its mode.
   useEffect(() => {
@@ -153,24 +156,49 @@ export default function GamePage() {
   const coverSize = isDesktop ? { w: 300, h: 400 } : { w: 200, h: 266 };
 
   const cover = (
-    <TiltedCard
-      imageSrc={coverSrc}
-      altText={game.name}
-      containerWidth={coverSize.w}
-      containerHeight={coverSize.h}
-      imageWidth={coverSize.w}
-      imageHeight={coverSize.h}
-      rotateAmplitude={12}
-      scaleOnHover={1.04}
-      radius={isDesktop ? 22 : 18}
-      showTooltip={false}
+    // The name lets the tapped cover morph into this one (see CoverTransition).
+    <div
+      className="transition-[box-shadow] duration-700"
+      style={{
+        borderRadius: isDesktop ? 22 : 18,
+        viewTransitionName: COVER_TRANSITION,
+        boxShadow: tint ? `0 24px 70px -18px color-mix(in srgb, ${tint} 70%, transparent)` : undefined,
+      }}
     >
-      {generatedCover && (
-        <div className="absolute inset-0 flex items-end p-4 text-left">
-          <span className="font-display text-xl leading-tight font-bold drop-shadow-lg">{game.name}</span>
-        </div>
-      )}
-    </TiltedCard>
+      <TiltedCard
+        imageSrc={coverSrc}
+        altText={game.name}
+        containerWidth={coverSize.w}
+        containerHeight={coverSize.h}
+        imageWidth={coverSize.w}
+        imageHeight={coverSize.h}
+        rotateAmplitude={12}
+        scaleOnHover={1.04}
+        radius={isDesktop ? 22 : 18}
+        showTooltip={false}
+      >
+        {generatedCover && (
+          <div className="absolute inset-0 flex items-end p-4 text-left">
+            <span className="font-display text-xl leading-tight font-bold drop-shadow-lg">{game.name}</span>
+          </div>
+        )}
+      </TiltedCard>
+    </div>
+  );
+
+  // A soft glow in the cover's color behind the top of the page.
+  const glow = (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${tint ? 'opacity-100' : 'opacity-0'}`}
+      style={
+        tint
+          ? {
+              background: `radial-gradient(ellipse 70% 90% at ${isDesktop ? '22%' : '50%'} 0%, color-mix(in srgb, ${tint} 38%, transparent), transparent 75%)`,
+            }
+          : undefined
+      }
+    />
   );
 
   const chips = (
@@ -426,6 +454,7 @@ export default function GamePage() {
             {wide && <img src={wide} alt="" className="h-full w-full scale-110 object-cover opacity-45 blur-md" />}
             <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/50 to-bg/10" />
             <div className="absolute inset-0 bg-gradient-to-r from-bg/70 via-transparent to-bg/40" />
+            {glow}
           </div>
           <button
             onClick={goBack}
@@ -469,6 +498,7 @@ export default function GamePage() {
         <div className="absolute inset-0 h-[420px] overflow-hidden">
           {coverSrc && <img src={coverSrc} alt="" className="h-full w-full scale-125 object-cover opacity-50 blur-3xl" />}
           <div className="absolute inset-0 bg-gradient-to-b from-bg/30 via-bg/60 to-bg" />
+          {glow}
         </div>
 
         <div className="pt-safe relative px-4">

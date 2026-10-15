@@ -18,6 +18,7 @@ export default function Cover({ game, size = 420, className = '', showTitle = tr
 
   return (
     <div
+      data-cover
       className={`${/\b(absolute|fixed)\b/.test(className) ? '' : 'relative'} overflow-hidden bg-surface-2 ${className}`}
       style={style}
     >

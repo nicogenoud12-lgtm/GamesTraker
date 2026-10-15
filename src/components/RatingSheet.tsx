@@ -7,6 +7,7 @@ import type { Game, PlayStatus, Replay, TierId } from '../lib/types';
 import { daysBetween, localDay } from '../lib/format';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
+import { celebrate } from '../lib/celebrate';
 
 interface Props {
   game: Game;
@@ -88,6 +89,8 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
     });
     toast(existing ? 'Puntaje actualizado' : `${game.name}: ${score} · ${TIER_BY_ID[tier].label}`);
     onClose();
+    // Reaching Histórico deserves a little party (only the first time, not on every edit).
+    if (tier === 'historico' && existing?.tier !== 'historico') celebrate();
   };
 
   const remove = () => {
