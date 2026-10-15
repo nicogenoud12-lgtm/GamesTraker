@@ -39,6 +39,7 @@ export interface Rating {
 export interface GameList {
   id: string;
   name: string;
+  /** Icon id from LIST_ICONS (older lists may still hold an emoji). */
   emoji: string;
   gameIds: string[];
   system: boolean;
