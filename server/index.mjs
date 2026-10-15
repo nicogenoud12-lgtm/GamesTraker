@@ -1,4 +1,4 @@
-// GamesTraker sync API: user accounts (username + password) and one JSON
+// GamesTracker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
 // critic-score lookup (Steam's Metacritic, optionally IGDB) and IMDb ratings
 // (from IMDb's daily public file) that browsers can't do themselves.
@@ -565,4 +565,4 @@ http
       if (!res.headersSent) send(res, e.status ?? 500, { error: e instanceof HttpError ? e.message : 'Error del servidor' });
     });
   })
-  .listen(PORT, () => console.log(`GamesTraker API on :${PORT}`));
+  .listen(PORT, () => console.log(`GamesTracker API on :${PORT}`));

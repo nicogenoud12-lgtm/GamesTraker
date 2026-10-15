@@ -69,7 +69,7 @@ export default function Home() {
         <header className="pt-safe relative px-5">
           <div className="flex items-center justify-between pt-6">
             <h1 className="font-display text-2xl font-bold tracking-tight">
-              Games<span className="grad-text">Traker</span>
+              Games<span className="grad-text">Tracker</span>
             </h1>
             <div className="flex items-center gap-2">
               <SyncBadge />

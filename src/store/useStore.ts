@@ -168,7 +168,7 @@ export const useStore = create<State>()(
       importData: (data) => {
         const d = data as Partial<Pick<State, 'games' | 'ratings' | 'lists'>>;
         if (!d || typeof d !== 'object' || !d.games || !d.ratings || !Array.isArray(d.lists)) {
-          throw new Error('El archivo no es un backup de GamesTraker');
+          throw new Error('El archivo no es un backup de GamesTracker');
         }
         // Imported lists count as the newest edit so syncing keeps them; what the
         // backup doesn't have is marked deleted. Ratings keep their own dates.

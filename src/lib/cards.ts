@@ -122,7 +122,7 @@ export async function ratingCard(game: Game, rating: Rating, mode: Mode): Promis
 
   ctx.font = '400 30px "Inter Variable"';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(mode === 'games' ? 'Mi puntaje en GamesTraker' : 'Mi puntaje en GamesTraker · Series y pelis', W / 2, H - 80);
+  ctx.fillText(mode === 'games' ? 'Mi puntaje en GamesTracker' : 'Mi puntaje en GamesTracker · Series y pelis', W / 2, H - 80);
   return canvas;
 }
 
@@ -243,6 +243,6 @@ export async function yearCard(s: YearSummary): Promise<HTMLCanvasElement> {
 
   ctx.font = '400 30px "Inter Variable"';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(`Mi año en GamesTraker · ${MODES[s.mode].label}`, W / 2, H - 80);
+  ctx.fillText(`Mi año en GamesTracker · ${MODES[s.mode].label}`, W / 2, H - 80);
   return canvas;
 }
