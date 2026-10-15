@@ -160,6 +160,10 @@ function ListCard({ list, games }: { list: GameList; games: Record<string, Game>
               borderWidth={2}
               borderColor="rgba(255,255,255,0.18)"
               animationDelay={0.1}
+              // Calm: neighbours only make a little room and nothing bounces much.
+              pushDistance={12}
+              hoverScale={1.04}
+              bounciness={0.15}
             />
           ) : (
             <span className="text-white/15">
