@@ -6,6 +6,7 @@ import { DEMO_GAMES } from '../data/demo';
 import { DEMO_SCREEN } from '../data/demoScreen';
 import { keyFor, popularItems, searchItems, useKeys } from '../lib/catalog';
 import { MODES } from '../lib/mode';
+import { useIsDesktop } from '../lib/useMedia';
 import type { Game } from '../lib/types';
 import { useMode } from '../store/useUi';
 
@@ -18,6 +19,8 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mode = useMode();
+  // On phones focusing would pop the keyboard up over the trending list; wait for a tap.
+  const isDesktop = useIsDesktop();
   const keys = useKeys();
   const key = keyFor(mode, keys);
   const copy = MODES[mode];
@@ -75,7 +78,7 @@ export default function Search() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={copy.searchHint}
             className="h-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted/60"
-            autoFocus
+            autoFocus={isDesktop}
             enterKeyHint="search"
           />
           {loading && <Loader2 size={18} className="animate-spin text-muted" />}
