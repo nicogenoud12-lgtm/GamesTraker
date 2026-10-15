@@ -7,7 +7,7 @@ import type { Game } from '../lib/types';
 import { NEXT_LIST_ID, useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 
-export default function GameRow({ game }: { game: Game }) {
+export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
   const rating = useStore((s) => s.ratings[game.id]);
   const queued = useStore((s) => s.lists.find((l) => l.id === NEXT_LIST_ID)?.gameIds.includes(game.id) ?? false);
   const addToList = useStore((s) => s.addToList);
@@ -27,6 +27,9 @@ export default function GameRow({ game }: { game: Game }) {
 
   return (
     <li className="flex items-center gap-3 py-2">
+      {rank != null && (
+        <span className="-mr-1 w-6 shrink-0 text-center font-display text-sm font-bold text-muted tabular-nums">{rank}</span>
+      )}
       <Link to={`/juego/${encodeURIComponent(game.id)}`} onClick={() => rememberGame(game)} className="flex min-w-0 flex-1 items-center gap-3">
         <Cover game={game} className="h-[72px] w-[54px] shrink-0 rounded-lg text-[9px]" showTitle={false} />
         <div className="min-w-0 flex-1">
@@ -34,7 +37,12 @@ export default function GameRow({ game }: { game: Game }) {
           <p className="truncate text-sm text-muted">
             {[year(game.released), shortPlatforms(game.platforms, 2)].filter(Boolean).join(' · ')}
           </p>
-          {game.genres.length > 0 && <p className="truncate text-xs text-muted/70">{game.genres.slice(0, 3).join(', ')}</p>}
+          {(game.genres.length > 0 || game.metacritic != null) && (
+            <p className="truncate text-xs text-muted/70">
+              {game.metacritic != null && <span className="mr-1.5 font-semibold text-emerald-300">MC {game.metacritic}</span>}
+              {game.genres.slice(0, 3).join(', ')}
+            </p>
+          )}
         </div>
       </Link>
       {rating ? (

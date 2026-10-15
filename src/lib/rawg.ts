@@ -9,6 +9,7 @@ interface RawgGame {
   released: string | null;
   genres?: { name: string }[];
   platforms?: { platform: { name: string } }[] | null;
+  metacritic?: number | null;
 }
 
 interface RawgDetail extends RawgGame {
@@ -46,14 +47,22 @@ function toGame(g: RawgGame): Game {
     released: g.released,
     genres: (g.genres ?? []).map((x) => x.name),
     platforms: (g.platforms ?? []).map((x) => x.platform.name),
+    metacritic: g.metacritic ?? null,
   };
 }
 
+// Discover rows are revisited often; keep responses for a while to save API calls.
+const CACHE_MS = 10 * 60 * 1000;
+const cache = new Map<string, { at: number; data: unknown }>();
+
 async function get<T>(key: string, path: string, params: Record<string, string> = {}, signal?: AbortSignal): Promise<T> {
   const qs = new URLSearchParams({ key, ...params });
+  const url = `${API}${path}?${qs}`;
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data as T;
   let res: Response;
   try {
-    res = await fetch(`${API}${path}?${qs}`, { signal });
+    res = await fetch(url, { signal });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
     throw new RawgError('No se pudo conectar con RAWG. Revisá que la API key sea válida (Ajustes).', 0);
@@ -61,7 +70,9 @@ async function get<T>(key: string, path: string, params: Record<string, string> 
   if (!res.ok) {
     throw new RawgError(res.status === 401 ? 'API key inválida' : `Error de RAWG (${res.status})`, res.status);
   }
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  cache.set(url, { at: Date.now(), data });
+  return data;
 }
 
 export async function rawgSearch(key: string, query: string, signal?: AbortSignal): Promise<Game[]> {
@@ -103,4 +114,24 @@ export async function rawgDetail(key: string, rawgId: string): Promise<GameDetai
     website: g.website || null,
     screenshots: shots.results.map((s) => s.image),
   };
+}
+
+export interface RawgQuery {
+  dates?: string;
+  genres?: string;
+  parent_platforms?: string;
+  ordering?: string;
+  metacritic?: string;
+}
+
+export async function rawgDiscover(
+  key: string,
+  query: RawgQuery,
+  page: number,
+  signal?: AbortSignal,
+): Promise<{ games: Game[]; hasMore: boolean }> {
+  const params: Record<string, string> = { page: String(page), page_size: '20' };
+  for (const [k, v] of Object.entries(query)) if (v) params[k] = v;
+  const data = await get<{ results: RawgGame[]; next: string | null }>(key, '/games', params, signal);
+  return { games: data.results.map(toGame), hasMore: Boolean(data.next) };
 }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Play, Search, Settings } from 'lucide-react';
+import { ChevronRight, Compass, Play, Search, Settings } from 'lucide-react';
 import Aurora from '../components/reactbits/Aurora';
 import CountUp from '../components/reactbits/CountUp';
 import Cover from '../components/Cover';
@@ -63,9 +63,14 @@ export default function Home() {
           <p className="text-4xl">🎮</p>
           <h2 className="mt-3 font-display text-xl font-bold">Empezá tu colección</h2>
           <p className="mt-1 text-sm text-muted">Buscá un juego que hayas jugado para puntuarlo, o agregalo a tu lista de próximos.</p>
-          <Link to="/buscar" className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
-            <Search size={18} /> Buscar juegos
-          </Link>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Link to="/buscar" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
+              <Search size={18} /> Buscar juegos
+            </Link>
+            <Link to="/descubrir" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-semibold">
+              <Compass size={18} /> Descubrir
+            </Link>
+          </div>
         </section>
       )}
 

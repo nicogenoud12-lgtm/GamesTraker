@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { Gamepad2, House, ListOrdered, Search } from 'lucide-react';
+import { Compass, Gamepad2, House, ListOrdered, Search } from 'lucide-react';
 
 const TABS = [
   { to: '/', label: 'Inicio', icon: House, end: true },
+  { to: '/descubrir', label: 'Descubrir', icon: Compass, end: false },
   { to: '/buscar', label: 'Buscar', icon: Search, end: false },
   { to: '/listas', label: 'Listas', icon: ListOrdered, end: false },
   { to: '/mis-juegos', label: 'Mis juegos', icon: Gamepad2, end: false },
@@ -23,7 +24,7 @@ export default function TabBar() {
             >
               {({ isActive }) => (
                 <>
-                  <span className={`rounded-full px-4 py-1 transition ${isActive ? 'bg-accent/20 text-accent' : ''}`}>
+                  <span className={`rounded-full px-3.5 py-1 transition ${isActive ? 'bg-accent/20 text-accent' : ''}`}>
                     <Icon size={21} strokeWidth={isActive ? 2.4 : 2} />
                   </span>
                   {label}
