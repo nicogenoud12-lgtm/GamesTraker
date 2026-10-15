@@ -1,0 +1,44 @@
+export type TierId = 'malo' | 'aburrido' | 'safa' | 'bueno' | 'buenisimo' | 'historico';
+
+export type PlayStatus = 'terminado' | 'completado' | 'abandonado';
+
+/** Snapshot of a game kept locally so lists and ratings render offline. */
+export interface Game {
+  id: string;
+  name: string;
+  cover: string | null;
+  released: string | null;
+  genres: string[];
+  platforms: string[];
+}
+
+export interface GameDetail extends Game {
+  description: string;
+  developers: string[];
+  publishers: string[];
+  metacritic: number | null;
+  playtime: number | null;
+  website: string | null;
+  screenshots: string[];
+}
+
+export interface Rating {
+  gameId: string;
+  score: number;
+  tier: TierId;
+  status: PlayStatus;
+  platform: string | null;
+  finishedAt: string | null;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GameList {
+  id: string;
+  name: string;
+  emoji: string;
+  gameIds: string[];
+  system: boolean;
+  createdAt: number;
+}

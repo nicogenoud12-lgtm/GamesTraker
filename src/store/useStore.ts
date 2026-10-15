@@ -1,0 +1,124 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { uid } from '../lib/format';
+import type { Game, GameList, Rating } from '../lib/types';
+
+export const NEXT_LIST_ID = 'next';
+export const PLAYING_LIST_ID = 'playing';
+
+const SYSTEM_LISTS: GameList[] = [
+  { id: PLAYING_LIST_ID, name: 'Jugando ahora', emoji: '🎮', gameIds: [], system: true, createdAt: 0 },
+  { id: NEXT_LIST_ID, name: 'Próximos a jugar', emoji: '⏭️', gameIds: [], system: true, createdAt: 1 },
+];
+
+interface State {
+  apiKey: string;
+  /** Local snapshots of every game the user has rated or listed. */
+  games: Record<string, Game>;
+  ratings: Record<string, Rating>;
+  lists: GameList[];
+
+  setApiKey: (key: string) => void;
+  rememberGame: (game: Game) => void;
+  saveRating: (game: Game, rating: Omit<Rating, 'gameId' | 'createdAt' | 'updatedAt'>) => void;
+  deleteRating: (gameId: string) => void;
+
+  createList: (name: string, emoji: string) => string;
+  updateList: (id: string, patch: Partial<Pick<GameList, 'name' | 'emoji'>>) => void;
+  deleteList: (id: string) => void;
+  addToList: (listId: string, game: Game, position?: 'top' | 'bottom') => void;
+  removeFromList: (listId: string, gameId: string) => void;
+  reorderList: (listId: string, gameIds: string[]) => void;
+
+  importData: (data: unknown) => void;
+}
+
+function snapshot(game: Game): Game {
+  const { id, name, cover, released, genres, platforms } = game;
+  return { id, name, cover, released, genres, platforms };
+}
+
+export const useStore = create<State>()(
+  persist(
+    (set) => ({
+      apiKey: '',
+      games: {},
+      ratings: {},
+      lists: SYSTEM_LISTS,
+
+      setApiKey: (apiKey) => set({ apiKey }),
+
+      rememberGame: (game) => set((s) => ({ games: { ...s.games, [game.id]: snapshot(game) } })),
+
+      saveRating: (game, rating) =>
+        set((s) => {
+          const prev = s.ratings[game.id];
+          const now = Date.now();
+          return {
+            games: { ...s.games, [game.id]: snapshot(game) },
+            ratings: {
+              ...s.ratings,
+              [game.id]: { ...rating, gameId: game.id, createdAt: prev?.createdAt ?? now, updatedAt: now },
+            },
+            // A freshly rated game has been played: drop it from the queue lists.
+            lists: prev
+              ? s.lists
+              : s.lists.map((l) =>
+                  l.id === NEXT_LIST_ID || l.id === PLAYING_LIST_ID
+                    ? { ...l, gameIds: l.gameIds.filter((id) => id !== game.id) }
+                    : l,
+                ),
+          };
+        }),
+
+      deleteRating: (gameId) =>
+        set((s) => {
+          const ratings = { ...s.ratings };
+          delete ratings[gameId];
+          return { ratings };
+        }),
+
+      createList: (name, emoji) => {
+        const id = uid();
+        set((s) => ({ lists: [...s.lists, { id, name, emoji, gameIds: [], system: false, createdAt: Date.now() }] }));
+        return id;
+      },
+
+      updateList: (id, patch) => set((s) => ({ lists: s.lists.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),
+
+      deleteList: (id) => set((s) => ({ lists: s.lists.filter((l) => l.id !== id || l.system) })),
+
+      addToList: (listId, game, position = 'bottom') =>
+        set((s) => ({
+          games: { ...s.games, [game.id]: snapshot(game) },
+          lists: s.lists.map((l) => {
+            if (l.id !== listId || l.gameIds.includes(game.id)) return l;
+            return { ...l, gameIds: position === 'top' ? [game.id, ...l.gameIds] : [...l.gameIds, game.id] };
+          }),
+        })),
+
+      removeFromList: (listId, gameId) =>
+        set((s) => ({
+          lists: s.lists.map((l) => (l.id === listId ? { ...l, gameIds: l.gameIds.filter((id) => id !== gameId) } : l)),
+        })),
+
+      reorderList: (listId, gameIds) =>
+        set((s) => ({ lists: s.lists.map((l) => (l.id === listId ? { ...l, gameIds } : l)) })),
+
+      importData: (data) => {
+        const d = data as Partial<Pick<State, 'games' | 'ratings' | 'lists'>>;
+        if (!d || typeof d !== 'object' || !d.games || !d.ratings || !Array.isArray(d.lists)) {
+          throw new Error('El archivo no es un backup de GamesTraker');
+        }
+        const lists = [...d.lists];
+        for (const sys of SYSTEM_LISTS) if (!lists.some((l) => l.id === sys.id)) lists.unshift(sys);
+        set({ games: d.games, ratings: d.ratings, lists });
+      },
+    }),
+    { name: 'gamestraker', version: 1 },
+  ),
+);
+
+export function useRating(gameId: string | undefined): Rating | undefined {
+  return useStore((s) => (gameId ? s.ratings[gameId] : undefined));
+}
