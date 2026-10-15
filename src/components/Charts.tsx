@@ -47,7 +47,7 @@ export function ColumnChart({
               className="group relative flex h-full min-w-0 flex-1 items-end"
             >
               <span
-                className="w-full rounded-t-[4px] transition-opacity"
+                className="mx-auto w-full max-w-14 rounded-t-[4px] transition-opacity"
                 style={{
                   height: b.value ? `${Math.max(4, (b.value / max) * 100)}%` : 2,
                   background: b.value ? 'var(--color-accent)' : 'var(--color-line)',

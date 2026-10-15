@@ -10,6 +10,10 @@ import { TIERS } from '../lib/tiers';
 import { year } from '../lib/format';
 import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
+import { useIsDesktop } from '../lib/useMedia';
+import type { Game, Rating } from '../lib/types';
+import type { Tier } from '../lib/tiers';
+import { TIER_BY_ID } from '../lib/tiers';
 
 export default function Home() {
   const games = useStore((s) => s.games);
@@ -18,6 +22,7 @@ export default function Home() {
   const addToList = useStore((s) => s.addToList);
   const removeFromList = useStore((s) => s.removeFromList);
   const toast = useToast((s) => s.show);
+  const isDesktop = useIsDesktop();
 
   const rated = Object.values(ratings).sort((a, b) => b.updatedAt - a.updatedAt);
   const avg = rated.length ? Math.round(rated.reduce((n, r) => n + r.score, 0) / rated.length) : 0;
@@ -35,6 +40,15 @@ export default function Home() {
   };
 
   const counts = TIERS.map((t) => ({ tier: t, n: rated.filter((r) => r.tier === t.id).length }));
+
+  if (isDesktop) {
+    return (
+      <HomeDesktop
+        {...{ games, rated, avg, legendary, playing, next, upNext, counts }}
+        onStart={startPlaying}
+      />
+    );
+  }
 
   return (
     <div>
@@ -212,6 +226,220 @@ function SyncBadge() {
       className={`rounded-full bg-white/10 p-2.5 backdrop-blur ${status === 'error' ? 'text-rose-400' : 'text-emerald-300'}`}
     >
       {status === 'error' ? <CloudOff size={18} /> : status === 'syncing' ? <RefreshCw size={18} className="animate-spin" /> : <Cloud size={18} />}
+    </Link>
+  );
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 6 ? 'Buenas noches' : h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+interface DesktopProps {
+  games: Record<string, Game>;
+  rated: Rating[];
+  avg: number;
+  legendary: number;
+  playing: Game[];
+  next: Game[];
+  upNext: Game | undefined;
+  counts: { tier: Tier; n: number }[];
+  onStart: () => void;
+}
+
+/** Wide dashboard for the browser: hero for the next game, posters and a side column. */
+function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, counts, onStart }: DesktopProps) {
+  const empty = rated.length === 0 && next.length === 0 && playing.length === 0;
+  const recent = rated.filter((r) => games[r.gameId]).slice(0, 8);
+
+  return (
+    <div className="relative">
+      <div className="pointer-events-none absolute -top-0 -right-6 -left-6 h-64 opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]">
+        <Aurora colorStops={['#7c3aed', '#f472b6', '#22d3ee']} amplitude={1.1} blend={0.6} speed={0.5} mouseInteraction={false} />
+      </div>
+
+      <header className="relative flex items-end justify-between gap-6 pt-10">
+        <div>
+          <p className="text-muted">{greeting()}</p>
+          <h1 className="font-display text-4xl font-bold tracking-tight">Tu biblioteca</h1>
+        </div>
+        <div className="flex gap-3">
+          {[
+            { label: 'Jugados', value: rated.length },
+            { label: 'Promedio', value: avg },
+            { label: 'Históricos', value: legendary },
+          ].map((t) => (
+            <div key={t.label} className="w-36 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 backdrop-blur-md">
+              <div className="font-display text-3xl font-bold tabular-nums">
+                <CountUp to={t.value} duration={1.2} trigger="load" />
+              </div>
+              <div className="text-xs text-muted">{t.label}</div>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      {empty && (
+        <section className="relative mt-8 flex items-center justify-between gap-6 rounded-3xl border border-line bg-surface p-8">
+          <div>
+            <h2 className="font-display text-2xl font-bold">Empezá tu colección 🎮</h2>
+            <p className="mt-1 text-muted">Buscá un juego que hayas jugado para puntuarlo, o agregalo a tu lista de próximos.</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Link to="/buscar" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
+              <Search size={18} /> Buscar juegos
+            </Link>
+            <Link to="/descubrir" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-semibold">
+              <Compass size={18} /> Descubrir
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {upNext && (
+        <section className="relative mt-8 h-80 overflow-hidden rounded-3xl border border-line">
+          <Cover game={upNext} size={1280} showTitle={false} className="absolute inset-0 scale-105 opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/85 to-bg/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-bg/80 to-transparent" />
+          <div className="relative flex h-full items-end gap-7 p-8">
+            <Link to={`/juego/${encodeURIComponent(upNext.id)}`} className="shrink-0 transition hover:-translate-y-1">
+              <Cover game={upNext} className="aspect-[3/4] w-44 rounded-2xl text-sm shadow-2xl" />
+            </Link>
+            <div className="min-w-0 flex-1 pb-1">
+              <span className="text-xs font-bold tracking-widest text-accent uppercase">Lo próximo · #1 en tu lista</span>
+              <h2 className="mt-2 line-clamp-2 font-display text-4xl leading-tight font-bold">{upNext.name}</h2>
+              <p className="mt-1 text-white/70">{[year(upNext.released), ...upNext.genres.slice(0, 2)].filter(Boolean).join(' · ')}</p>
+              <div className="mt-5 flex gap-3">
+                <button
+                  onClick={onStart}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 font-semibold text-black transition hover:brightness-90"
+                >
+                  <Play size={16} fill="currentColor" /> Empezar a jugar
+                </button>
+                <Link
+                  to={`/juego/${encodeURIComponent(upNext.id)}`}
+                  className="inline-flex items-center rounded-full bg-white/10 px-5 py-2.5 font-semibold backdrop-blur transition hover:bg-white/20"
+                >
+                  Ver ficha
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="mt-10 grid grid-cols-[minmax(0,1fr)_320px] gap-10">
+        <div className="space-y-10">
+          {playing.length > 0 && (
+            <section>
+              <DesktopTitle title="Jugando ahora" to={`/listas/${PLAYING_LIST_ID}`} />
+              <div className="grid grid-cols-4 gap-4">
+                {playing.slice(0, 4).map((g) => (
+                  <DesktopPoster key={g.id} game={g} />
+                ))}
+              </div>
+            </section>
+          )}
+          {recent.length > 0 && (
+            <section>
+              <DesktopTitle title="Últimos puntuados" to="/mis-juegos" />
+              <div className="grid grid-cols-4 gap-4">
+                {recent.map((r) => (
+                  <DesktopPoster key={r.gameId} game={games[r.gameId]} rating={r} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <aside className="space-y-5">
+          {rated.length > 0 && (
+            <div className="rounded-3xl border border-line bg-surface p-5">
+              <DesktopTitle title="Tu escala" to="/estadisticas" more="Estadísticas" />
+              <div className="flex h-3 gap-[2px] overflow-hidden rounded-full">
+                {counts.map(({ tier, n }) => (n ? <div key={tier.id} style={{ flex: n, background: tier.color }} /> : null))}
+              </div>
+              <ul className="mt-4 space-y-2 text-sm">
+                {counts
+                  .slice()
+                  .reverse()
+                  .map(({ tier, n }) => (
+                    <li key={tier.id}>
+                      <Link to={`/mis-juegos?tier=${tier.id}`} className="flex items-center gap-2 hover:text-white">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: tier.color }} />
+                        <span className="text-white/80">
+                          {tier.emoji} {tier.label}
+                        </span>
+                        <span className="ml-auto text-muted tabular-nums">{n}</span>
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+          {next.length > 1 && (
+            <div className="rounded-3xl border border-line bg-surface p-5">
+              <DesktopTitle title="Después" to={`/listas/${NEXT_LIST_ID}`} />
+              <ol className="space-y-2.5">
+                {next.slice(1, 6).map((g, i) => (
+                  <li key={g.id}>
+                    <Link to={`/juego/${encodeURIComponent(g.id)}`} className="flex items-center gap-3 hover:text-white">
+                      <span className="w-4 text-center font-display text-sm font-bold text-muted">{i + 2}</span>
+                      <Cover game={g} showTitle={false} className="h-12 w-9 shrink-0 rounded-md" />
+                      <span className="truncate text-sm font-medium">{g.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <Link
+            to="/descubrir"
+            className="block rounded-3xl border border-accent/30 bg-gradient-to-br from-violet-500/20 to-pink-500/10 p-5 transition hover:border-accent/60"
+          >
+            <Compass className="text-accent" />
+            <p className="mt-3 font-display text-lg font-bold">¿Qué juego sigue?</p>
+            <p className="text-sm text-muted">Recomendaciones según tus gustos, lo mejor del año y más.</p>
+          </Link>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function DesktopTitle({ title, to, more = 'Ver todo' }: { title: string; to?: string; more?: string }) {
+  return (
+    <div className="mb-4 flex items-center justify-between">
+      <h2 className="font-display text-xl font-bold">{title}</h2>
+      {to && (
+        <Link to={to} className="flex items-center text-sm text-muted hover:text-white">
+          {more} <ChevronRight size={16} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function DesktopPoster({ game, rating }: { game: Game; rating?: Rating }) {
+  const tier = rating ? TIER_BY_ID[rating.tier] : null;
+  return (
+    <Link to={`/juego/${encodeURIComponent(game.id)}`} className="group block">
+      <div className="relative overflow-hidden rounded-2xl">
+        <Cover game={game} size={640} className="aspect-[3/4] text-sm transition duration-500 group-hover:scale-105" />
+        {rating && (
+          <span className="absolute top-2 right-2 rounded-lg bg-black/75 backdrop-blur">
+            <ScoreBadge score={rating.score} className="text-base" />
+          </span>
+        )}
+      </div>
+      <p className="mt-2 truncate text-sm font-semibold group-hover:text-white">{game.name}</p>
+      {tier && (
+        <p className="text-xs" style={{ color: tier.color }}>
+          {tier.emoji} {tier.label}
+        </p>
+      )}
     </Link>
   );
 }

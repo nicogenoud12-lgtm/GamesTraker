@@ -87,7 +87,7 @@ export default function Stats() {
         ))}
       </ScrollRow>
 
-      <div className="grid grid-cols-3 gap-2 px-5">
+      <div className="grid grid-cols-3 gap-2 px-5 lg:gap-4">
         <Tile label={finished.length === 1 ? 'Terminado' : 'Terminados'} value={finished.length} />
         <Tile label="Promedio" value={average(entries)} />
         <Tile label="Históricos" value={entries.filter((e) => e.rating.tier === 'historico').length} />
@@ -98,8 +98,9 @@ export default function Stats() {
         </p>
       )}
 
+      <div className="lg:mt-2 lg:grid lg:grid-cols-2 lg:gap-x-4 lg:px-5">
       {year ? (
-        <Card title={`Juegos por mes en ${year}`}>
+        <Card title={`Juegos por mes en ${year}`} wide>
           <ColumnChart
             bars={MONTHS.map((m, i) => {
               const inMonth = entries.filter((e) => e.month === i);
@@ -114,7 +115,7 @@ export default function Stats() {
         </Card>
       ) : (
         years.length > 1 && (
-          <Card title="Juegos por año" hint="Tocá un año para verlo en detalle">
+          <Card title="Juegos por año" hint="Tocá un año para verlo en detalle" wide>
             <ColumnChart
               bars={years
                 .slice()
@@ -201,17 +202,18 @@ export default function Stats() {
           <RankBars rows={genres} />
         </Card>
       )}
+      </div>
     </div>
   );
 }
 
 function Header({ onBack }: { onBack: () => void }) {
   return (
-    <header className="pt-safe px-4">
-      <button onClick={onBack} aria-label="Volver" className="mt-4 rounded-full bg-white/5 p-2.5">
+    <header className="pt-safe px-4 lg:pt-6">
+      <button onClick={onBack} aria-label="Volver" className="mt-4 rounded-full bg-white/5 p-2.5 lg:hidden">
         <ArrowLeft size={20} />
       </button>
-      <h1 className="mt-3 px-1 pb-4 font-display text-3xl font-bold tracking-tight">Estadísticas</h1>
+      <h1 className="mt-3 px-1 pb-4 font-display text-3xl font-bold tracking-tight lg:text-4xl">Estadísticas</h1>
     </header>
   );
 }
@@ -236,9 +238,9 @@ function Tile({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function Card({ title, hint, wide, children }: { title: string; hint?: string; wide?: boolean; children: ReactNode }) {
   return (
-    <section className="mx-5 mt-4 rounded-3xl border border-line bg-surface p-4">
+    <section className={`mx-5 mt-4 rounded-3xl border border-line bg-surface p-4 lg:mx-0 lg:p-5 ${wide ? 'lg:col-span-2' : ''}`}>
       <h2 className="font-display text-base font-bold">{title}</h2>
       {hint && <p className="text-xs text-muted">{hint}</p>}
       <div className="mt-3">{children}</div>

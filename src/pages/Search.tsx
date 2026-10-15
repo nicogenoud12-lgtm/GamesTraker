@@ -109,7 +109,7 @@ export default function Search() {
             {!loading && !error && results.length === 0 && (
               <p className="mt-10 text-center text-muted">No encontramos “{query}”.</p>
             )}
-            <ul className="mt-2 divide-y divide-white/5">
+            <ul className="mt-2 divide-y divide-white/5 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:divide-y-0">
               {results.map((g) => (
                 <GameRow key={g.id} game={g} />
               ))}
@@ -119,7 +119,7 @@ export default function Search() {
           popular.length > 0 && (
             <>
               <h2 className="mt-5 mb-1 font-display text-lg font-bold">{key ? 'Populares este año' : 'Para empezar'}</h2>
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-white/5 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:divide-y-0">
                 {popular.map((g) => (
                   <GameRow key={g.id} game={g} />
                 ))}

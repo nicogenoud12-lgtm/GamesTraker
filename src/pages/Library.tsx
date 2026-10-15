@@ -50,10 +50,10 @@ export default function Library() {
   return (
     <div>
       <header className="pt-safe px-5">
-        <div className="flex items-end justify-between gap-3 pt-6 pb-4">
+        <div className="flex items-end justify-between gap-3 pt-6 pb-4 lg:pt-10 lg:pb-6">
           <div>
             <p className="text-sm text-muted">Tu colección</p>
-            <h1 className="font-display text-3xl font-bold tracking-tight">Mis juegos</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight lg:text-4xl">Mis juegos</h1>
           </div>
           {all.length > 0 && (
             <div className="flex rounded-full border border-line bg-surface p-1">
@@ -151,7 +151,7 @@ function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTi
       <button
         onClick={() => !empty && onTier(tier.id)}
         disabled={empty}
-        className="flex w-[78px] shrink-0 flex-col items-center justify-center gap-0.5 text-black"
+        className="flex w-[78px] shrink-0 flex-col items-center justify-center gap-0.5 text-black lg:w-[120px]"
         style={{ background: `linear-gradient(160deg, ${tier.color}, ${tier.color}cc)` }}
       >
         <span className="text-2xl leading-none">{tier.emoji}</span>
@@ -163,7 +163,7 @@ function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTi
       ) : (
         <ScrollRow className="flex min-w-0 flex-1 items-center gap-2 p-2">
           {entries.map(({ game, rating }) => (
-            <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[66px] shrink-0" title={game.name}>
+            <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[66px] shrink-0 lg:w-[88px]" title={game.name}>
               <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
               <span
                 className="absolute right-1 bottom-1 rounded-md bg-black/80 px-1 font-display text-[11px] font-bold tabular-nums backdrop-blur"
@@ -228,7 +228,7 @@ function Grid({ entries, sort, tier, byScore, set }: GridProps) {
       {rows.length === 0 ? (
         <p className="mt-8 px-5 text-center text-muted">No hay juegos “{tier && TIER_BY_ID[tier].label}”.</p>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 px-5 sm:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-3 px-5 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
           {rows.map((e, i) => (
             <li key={e.game.id}>
               <Poster entry={e} rank={sort === 'score' && !tier && i < 3 ? i : null} />

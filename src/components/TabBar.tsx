@@ -11,7 +11,7 @@ const TABS = [
 
 export default function TabBar() {
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-bg/80 backdrop-blur-xl">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-bg/80 backdrop-blur-xl lg:hidden">
       <ul className="mx-auto flex max-w-lg">
         {TABS.map(({ to, label, icon: Icon, end }) => (
           <li key={to} className="flex-1">
