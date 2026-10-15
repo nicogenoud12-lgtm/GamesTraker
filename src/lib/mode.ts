@@ -27,6 +27,8 @@ interface ModeCopy {
   item: string;
   items: string;
   collection: string;
+  /** First half of the app's name in this mode: GamesTracker / MediaTracker. */
+  brand: string;
   searchHint: string;
   emptyTitle: string;
   emptyText: string;
@@ -51,6 +53,7 @@ export const MODES: Record<Mode, ModeCopy> = {
     item: 'juego',
     items: 'juegos',
     collection: 'Mis juegos',
+    brand: 'Games',
     searchHint: 'Zelda, Hades, Elden Ring…',
     emptyTitle: 'Empezá tu colección',
     emptyText: 'Buscá un juego que hayas jugado para puntuarlo, o agregalo a tu lista de próximos.',
@@ -73,6 +76,7 @@ export const MODES: Record<Mode, ModeCopy> = {
     item: 'título',
     items: 'títulos',
     collection: 'Mis series y pelis',
+    brand: 'Media',
     searchHint: 'Breaking Bad, Dune, Relatos salvajes…',
     emptyTitle: 'Empezá tu lista de series y pelis',
     emptyText: 'Buscá algo que hayas visto para puntuarlo, o agregalo a "Quiero ver".',

@@ -52,7 +52,7 @@ export async function ratingCard(game: Game, rating: Rating, mode: Mode): Promis
   const tier = TIER_BY_ID[rating.tier];
   background(ctx, img, mode);
   ctx.textAlign = 'center';
-  drawLogo(ctx, 150, ACCENT[mode][0]);
+  drawLogo(ctx, 150, ACCENT[mode][0], MODES[mode].brand);
 
   // Cover with a soft shadow.
   const cw = 540;
@@ -122,7 +122,7 @@ export async function ratingCard(game: Game, rating: Rating, mode: Mode): Promis
 
   ctx.font = '400 30px "Inter Variable"';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(mode === 'games' ? 'Mi puntaje en GamesTracker' : 'Mi puntaje en GamesTracker · Series y pelis', W / 2, H - 80);
+  ctx.fillText(`Mi puntaje en ${MODES[mode].brand}Tracker`, W / 2, H - 80);
   return canvas;
 }
 
@@ -146,7 +146,7 @@ export async function yearCard(s: YearSummary): Promise<HTMLCanvasElement> {
   const [a, b] = ACCENT[s.mode];
   background(ctx, null, s.mode);
   ctx.textAlign = 'center';
-  drawLogo(ctx, 150, a);
+  drawLogo(ctx, 150, a, MODES[s.mode].brand);
 
   ctx.font = '700 170px "Space Grotesk"';
   const grad = ctx.createLinearGradient(200, 0, W - 200, 0);
@@ -243,6 +243,6 @@ export async function yearCard(s: YearSummary): Promise<HTMLCanvasElement> {
 
   ctx.font = '400 30px "Inter Variable"';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(`Mi año en GamesTracker · ${MODES[s.mode].label}`, W / 2, H - 80);
+  ctx.fillText(`Mi año en ${MODES[s.mode].brand}Tracker`, W / 2, H - 80);
   return canvas;
 }

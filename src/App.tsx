@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { startSync } from './lib/sync';
 import { useMode } from './store/useUi';
+import { MODES } from './lib/mode';
 import Sidebar from './components/Sidebar';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
@@ -24,6 +25,8 @@ export default function App() {
   const mode = useMode();
   useEffect(() => {
     document.documentElement.dataset.mode = mode;
+    // The tab is named after the side in use: GamesTracker / MediaTracker.
+    document.title = `${MODES[mode].brand}Tracker`;
   }, [mode]);
 
   return (
