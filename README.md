@@ -21,8 +21,8 @@ App para puntuar los juegos que vas jugando y armar tu lista de próximos… y l
 - **Series y pelis** con datos de [TMDB](https://www.themoviedb.org): "Viendo ahora", "Quiero ver", dónde verla
   (Netflix, Prime Video, Disney+, Max…), tráiler, reparto y recomendaciones. Sin key, modo demo.
 
-Animaciones de [React Bits](https://reactbits.dev): Aurora (fondo del inicio), TiltedCard (carátula en la ficha)
-y CountUp (estadísticas), en `src/components/reactbits/`.
+Animaciones de [React Bits](https://reactbits.dev): Aurora (fondo del inicio), TiltedCard (carátula en la ficha),
+CountUp (estadísticas) y CircularCarousel (carátulas de cada lista), en `src/components/reactbits/`.
 
 ## Desarrollo
 

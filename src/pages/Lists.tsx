@@ -5,7 +5,7 @@ import Cover from '../components/Cover';
 import PageHeader from '../components/PageHeader';
 import Sheet from '../components/Sheet';
 import ListIcon, { LIST_ICONS, ListGlyph } from '../components/ListIcon';
-import BounceCards from '../components/reactbits/BounceCards';
+import CircularCarousel from '../components/reactbits/CircularCarousel';
 import { resizeImage } from '../lib/rawg';
 import { useIsDesktop } from '../lib/useMedia';
 import type { Game, GameList } from '../lib/types';
@@ -116,12 +116,14 @@ function ListCard({ list, games }: { list: GameList; games: Record<string, Game>
   const items = list.gameIds.map((id) => games[id]).filter(Boolean);
   const lead = items[0];
   const covers = items
-    .slice(0, 5)
+    .slice(0, 10)
     .map(coverSrc)
     .filter((c): c is string => Boolean(c));
+  // A ring needs a few cards to look round; short lists repeat their covers.
+  const ring = covers.length ? Array.from({ length: Math.max(covers.length, 7) }, (_, i) => ({ src: covers[i % covers.length] })) : [];
   const isDesktop = useIsDesktop();
-  // Narrower fan on phones so the list name fits on one line.
-  const fan = isDesktop ? { width: 168, card: 86, spread: 20 } : { width: 140, card: 74, spread: 16 };
+  // Narrower on phones so the list name still fits.
+  const fan = isDesktop ? { width: 280, card: 96 } : { width: 150, card: 74 };
   const copy = MODES[listMode(list)];
   const hint =
     lead && list.id === copy.nextListId
@@ -146,25 +148,28 @@ function ListCard({ list, games }: { list: GameList; games: Record<string, Game>
           </p>
           {hint && <p className="mt-2 truncate text-xs font-semibold text-accent">{hint}</p>}
         </div>
-        <div className="flex shrink-0 items-center justify-center pr-2" style={{ width: fan.width }}>
-          {covers.length > 0 ? (
-            <BounceCards
-              images={covers}
-              containerWidth={fan.width}
-              containerHeight={190}
-              cardSize={fan.card}
-              spread={covers.length > 3 ? fan.spread : fan.spread + 6}
-              rotation={8}
-              arc={8}
-              radius={16}
-              borderWidth={2}
-              borderColor="rgba(255,255,255,0.18)"
-              animationDelay={0.1}
-              // Calm: neighbours only make a little room and nothing bounces much.
-              pushDistance={12}
-              hoverScale={1.04}
-              bounciness={0.15}
-            />
+        <div className="flex shrink-0 items-center justify-center" style={{ width: fan.width }}>
+          {ring.length > 0 ? (
+            // Just a slowly turning showcase: no drag or clicks, so tapping anywhere opens the list.
+            <div className="pointer-events-none h-full w-full">
+              <CircularCarousel
+                key={covers.join('|')}
+                items={ring}
+                preset="cylinder"
+                intro="rise"
+                cardWidth={fan.card}
+                aspectRatio={3 / 4}
+                gap={12}
+                speed={8}
+                draggable={false}
+                focusOnClick={false}
+                pauseOnHover={false}
+                depthFade={0.5}
+                fadeColor="#0b0b10"
+                innerShade={0.5}
+                cornerRadius={14}
+              />
+            </div>
           ) : (
             <span className="text-white/15">
               <ListGlyph list={list} size={72} />
