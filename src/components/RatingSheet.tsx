@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import Sheet from './Sheet';
 import { STATUSES, TIERS, TIER_BY_ID, tierForScore } from '../lib/tiers';
-import type { Game, PlayStatus, TierId } from '../lib/types';
+import type { Game, PlayStatus, Replay, TierId } from '../lib/types';
+import { daysBetween } from '../lib/format';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 
@@ -10,12 +11,27 @@ interface Props {
   game: Game;
   open: boolean;
   onClose: () => void;
+  /** RAWG's average playtime, shown next to the hours field. */
+  avgHours?: number | null;
+}
+
+const REPLAY: { id: Replay; label: string }[] = [
+  { id: 'si', label: 'Sí' },
+  { id: 'quizas', label: 'Tal vez' },
+  { id: 'no', label: 'No' },
+];
+
+/** Accepts "12", "12,5" or "12.5"; empty means unknown. */
+function parseHours(text: string): number | null {
+  const n = Number(text.replace(',', '.').trim());
+  return text.trim() && Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function RatingSheet({ game, open, onClose }: Props) {
+export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
   const existing = useStore((s) => s.ratings[game.id]);
+  const startedOn = useStore((s) => s.starts[game.id]);
   const saveRating = useStore((s) => s.saveRating);
   const deleteRating = useStore((s) => s.deleteRating);
   const toast = useToast((s) => s.show);
@@ -25,7 +41,10 @@ export default function RatingSheet({ game, open, onClose }: Props) {
   const [tierManual, setTierManual] = useState(false);
   const [status, setStatus] = useState<PlayStatus>('terminado');
   const [platform, setPlatform] = useState<string>('');
+  const [startedAt, setStartedAt] = useState('');
   const [finishedAt, setFinishedAt] = useState(today());
+  const [hours, setHours] = useState('');
+  const [replay, setReplay] = useState<Replay | null>(null);
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -36,9 +55,12 @@ export default function RatingSheet({ game, open, onClose }: Props) {
     setTierManual(existing ? existing.tier !== tierForScore(existing.score).id : false);
     setStatus(existing?.status ?? 'terminado');
     setPlatform(existing?.platform ?? '');
+    setStartedAt(existing?.startedAt ?? startedOn ?? '');
     setFinishedAt(existing?.finishedAt ?? today());
+    setHours(existing?.hours != null ? String(existing.hours).replace('.', ',') : '');
+    setReplay(existing?.replay ?? null);
     setNote(existing?.note ?? '');
-  }, [open, existing]);
+  }, [open, existing, startedOn]);
 
   const changeScore = (value: number) => {
     const v = Math.max(0, Math.min(100, Math.round(value)));
@@ -52,7 +74,17 @@ export default function RatingSheet({ game, open, onClose }: Props) {
   };
 
   const save = () => {
-    saveRating(game, { score, tier, status, platform: platform || null, finishedAt: finishedAt || null, note: note.trim() });
+    saveRating(game, {
+      score,
+      tier,
+      status,
+      platform: platform || null,
+      startedAt: startedAt || null,
+      finishedAt: finishedAt || null,
+      hours: parseHours(hours),
+      replay,
+      note: note.trim(),
+    });
     toast(existing ? 'Puntaje actualizado' : `${game.name}: ${score} · ${TIER_BY_ID[tier].label}`);
     onClose();
   };
@@ -64,6 +96,8 @@ export default function RatingSheet({ game, open, onClose }: Props) {
   };
 
   const color = TIER_BY_ID[tier].color;
+  const took = startedAt && finishedAt ? daysBetween(startedAt, finishedAt) : null;
+  const hoursValue = parseHours(hours);
 
   return (
     <Sheet
@@ -180,14 +214,68 @@ export default function RatingSheet({ game, open, onClose }: Props) {
           </select>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold">Fecha</span>
+          <span className="mb-1.5 block text-sm font-semibold">Horas jugadas</span>
+          <div className="relative">
+            <input
+              value={hours}
+              onChange={(e) => setHours(e.target.value.replace(/[^\d.,]/g, ''))}
+              inputMode="decimal"
+              placeholder="—"
+              className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pr-8 pl-3 text-sm placeholder:text-muted/60"
+            />
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted">h</span>
+          </div>
+        </label>
+      </div>
+      {avgHours ? (
+        <p className="mt-1.5 text-right text-xs text-muted">
+          Promedio en RAWG: {avgHours} h
+          {hoursValue != null && hoursValue > 0 && (
+            <span className="text-white/70"> · vos {hoursValue < avgHours ? 'más rápido' : hoursValue > avgHours ? 'más lento' : 'justo'}</span>
+          )}
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold">Lo empecé</span>
+          <input
+            type="date"
+            value={startedAt}
+            max={finishedAt || undefined}
+            onChange={(e) => setStartedAt(e.target.value)}
+            className="w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm [color-scheme:dark]"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold">{status === 'abandonado' ? 'Lo dejé' : 'Lo terminé'}</span>
           <input
             type="date"
             value={finishedAt}
+            min={startedAt || undefined}
             onChange={(e) => setFinishedAt(e.target.value)}
             className="w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm [color-scheme:dark]"
           />
         </label>
+      </div>
+      {took != null && took >= 0 && (
+        <p className="mt-1.5 text-xs text-muted">
+          Te llevó <span className="font-semibold text-white/80">{took === 0 ? 'un día' : `${took + 1} días`}</span>
+          {startedOn && startedOn === startedAt && !existing?.startedAt && ' · fecha de inicio tomada de cuando lo pusiste en "Jugando ahora"'}
+        </p>
+      )}
+
+      <h3 className="mt-5 mb-2 text-sm font-semibold">¿Lo volverías a jugar?</h3>
+      <div className="grid grid-cols-3 rounded-2xl bg-white/5 p-1">
+        {REPLAY.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => setReplay(replay === r.id ? null : r.id)}
+            className={`rounded-xl py-2 text-sm font-medium transition ${replay === r.id ? 'bg-white text-black' : 'text-muted'}`}
+          >
+            {r.label}
+          </button>
+        ))}
       </div>
 
       <label className="mt-5 block">

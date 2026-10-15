@@ -13,6 +13,10 @@ const SYSTEM_LISTS: GameList[] = [
 
 interface State {
   apiKey: string;
+  /** When the key was last changed, so the newest one wins when syncing. */
+  apiKeyUpdatedAt: number;
+  /** Day each game was moved to "Jugando ahora" (YYYY-MM-DD), to prefill the start date. */
+  starts: Record<string, string>;
   /** Local snapshots of every game the user has rated or listed. */
   games: Record<string, Game>;
   ratings: Record<string, Rating>;
@@ -50,13 +54,15 @@ export const useStore = create<State>()(
   persist(
     (set) => ({
       apiKey: '',
+      apiKeyUpdatedAt: 0,
+      starts: {},
       games: {},
       ratings: {},
       lists: SYSTEM_LISTS,
       ratingTombs: {},
       listTombs: {},
 
-      setApiKey: (apiKey) => set({ apiKey }),
+      setApiKey: (apiKey) => set({ apiKey, apiKeyUpdatedAt: Date.now() }),
 
       rememberGame: (game) => set((s) => ({ games: { ...s.games, [game.id]: snapshot(game) } })),
 
@@ -106,6 +112,10 @@ export const useStore = create<State>()(
       addToList: (listId, game, position = 'bottom') =>
         set((s) => ({
           games: { ...s.games, [game.id]: snapshot(game) },
+          starts:
+            listId === PLAYING_LIST_ID && !s.starts[game.id]
+              ? { ...s.starts, [game.id]: new Date().toISOString().slice(0, 10) }
+              : s.starts,
           lists: s.lists.map((l) => {
             if (l.id !== listId || l.gameIds.includes(game.id)) return l;
             const gameIds = position === 'top' ? [game.id, ...l.gameIds] : [...l.gameIds, game.id];
@@ -147,9 +157,14 @@ export const useStore = create<State>()(
     }),
     {
       name: 'gamestraker',
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const s = persisted as Partial<State>;
+        if (version < 3) {
+          s.starts = s.starts ?? {};
+          // A key typed before syncing existed should win over devices that have none.
+          s.apiKeyUpdatedAt = s.apiKey ? Date.now() : 0;
+        }
         if (version < 2) {
           s.lists = (s.lists ?? SYSTEM_LISTS).map((l) => ({ ...l, updatedAt: l.updatedAt ?? 0 }));
           s.ratingTombs = s.ratingTombs ?? {};

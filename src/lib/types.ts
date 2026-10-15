@@ -2,6 +2,8 @@ export type TierId = 'malo' | 'aburrido' | 'safa' | 'bueno' | 'buenisimo' | 'his
 
 export type PlayStatus = 'terminado' | 'completado' | 'abandonado';
 
+export type Replay = 'si' | 'quizas' | 'no';
+
 /** Snapshot of a game kept locally so lists and ratings render offline. */
 export interface Game {
   id: string;
@@ -30,7 +32,11 @@ export interface Rating {
   tier: TierId;
   status: PlayStatus;
   platform: string | null;
+  /** Older ratings don't have the fields below. */
+  startedAt?: string | null;
   finishedAt: string | null;
+  hours?: number | null;
+  replay?: Replay | null;
   note: string;
   createdAt: number;
   updatedAt: number;

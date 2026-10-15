@@ -8,7 +8,7 @@ import Cover from '../components/Cover';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { TIERS } from '../lib/tiers';
-import { year } from '../lib/format';
+import { playingDay, year } from '../lib/format';
 import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 import { useIsDesktop } from '../lib/useMedia';
@@ -20,6 +20,7 @@ export default function Home() {
   const games = useStore((s) => s.games);
   const ratings = useStore((s) => s.ratings);
   const lists = useStore((s) => s.lists);
+  const starts = useStore((s) => s.starts);
   const addToList = useStore((s) => s.addToList);
   const removeFromList = useStore((s) => s.removeFromList);
   const toast = useToast((s) => s.show);
@@ -45,7 +46,7 @@ export default function Home() {
   if (isDesktop) {
     return (
       <HomeDesktop
-        {...{ games, rated, avg, legendary, playing, next, upNext, counts }}
+        {...{ games, rated, avg, legendary, playing, next, upNext, counts, starts }}
         onStart={startPlaying}
       />
     );
@@ -104,6 +105,7 @@ export default function Home() {
               <Link key={g.id} to={`/juego/${encodeURIComponent(g.id)}`} className="w-28 shrink-0">
                 <Cover game={g} className="aspect-[3/4] rounded-2xl text-sm" />
                 <p className="mt-1.5 truncate text-sm font-medium">{g.name}</p>
+                {playingDay(starts[g.id]) && <p className="text-xs text-emerald-300">{playingDay(starts[g.id])}</p>}
               </Link>
             ))}
           </ScrollRow>
@@ -247,11 +249,12 @@ interface DesktopProps {
   next: Game[];
   upNext: Game | undefined;
   counts: { tier: Tier; n: number }[];
+  starts: Record<string, string>;
   onStart: () => void;
 }
 
 /** Wide dashboard for the browser: hero for the next game, posters and a side column. */
-function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, counts, onStart }: DesktopProps) {
+function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, counts, starts, onStart }: DesktopProps) {
   const empty = rated.length === 0 && next.length === 0 && playing.length === 0;
   const recent = rated.filter((r) => games[r.gameId]).slice(0, 8);
 
@@ -340,7 +343,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
               <DesktopTitle title="Jugando ahora" to={`/listas/${PLAYING_LIST_ID}`} />
               <div className="grid grid-cols-4 gap-4">
                 {playing.slice(0, 4).map((g) => (
-                  <DesktopPoster key={g.id} game={g} />
+                  <DesktopPoster key={g.id} game={g} caption={playingDay(starts[g.id])} />
                 ))}
               </div>
             </section>
@@ -427,7 +430,7 @@ function DesktopTitle({ title, to, more = 'Ver todo' }: { title: string; to?: st
   );
 }
 
-function DesktopPoster({ game, rating }: { game: Game; rating?: Rating }) {
+function DesktopPoster({ game, rating, caption }: { game: Game; rating?: Rating; caption?: string | null }) {
   const tier = rating ? TIER_BY_ID[rating.tier] : null;
   return (
     <Link to={`/juego/${encodeURIComponent(game.id)}`} className="group block">
@@ -440,6 +443,7 @@ function DesktopPoster({ game, rating }: { game: Game; rating?: Rating }) {
         )}
       </div>
       <p className="mt-2 truncate text-sm font-semibold group-hover:text-white">{game.name}</p>
+      {caption && <p className="text-xs text-emerald-300">{caption}</p>}
       {tier && (
         <p className="text-xs" style={{ color: tier.color }}>
           {tier.emoji} {tier.label}
