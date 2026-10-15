@@ -102,11 +102,13 @@ sincronización). nginx deriva `/api/` a la API, así que no hace falta otra rut
 En **Amigos** (barra lateral, o el botón de personas en el inicio del celu) cada uno tiene un link de invitación.
 Quien lo abre se crea una cuenta, aunque el registro esté cerrado, o entra con la suya, y quedan como amigos.
 
-- **Puntajes:** los amigos ven lo que puntuó cada uno, en Amigos y en la ficha de cada título. Viene prendido y se
-  puede ocultar en Ajustes → Amigos. Las notas nunca se comparten.
-- **Avisos** ("juan le puso 94 a Hades"): vienen apagados. Cada uno los prende en Ajustes → Amigos.
-  - A los amigos les aparecen en Amigos, con el número en el ícono.
-  - Si prendieron "Notificaciones en este dispositivo", también les llegan como notificación del teléfono o la
+- **Puntajes:** no se comparte nada por defecto. En Amigos, cada uno prende "Compartirle mis puntajes" con los amigos
+  que quiera, uno por uno. Esos amigos lo ven en Amigos, en la escala de esa persona y en la ficha de cada título.
+  Las notas nunca se comparten.
+- **Avisos** ("juan le puso 94 a Hades"): vienen apagados. Se prenden en Ajustes → Amigos y les llegan solo a los
+  amigos con los que se comparte.
+  - Aparecen en Amigos, con el número en el ícono.
+  - Si el amigo prendió "Notificaciones en este dispositivo", también le llegan como notificación del teléfono o la
     compu. En iPhone, primero hay que agregar la app a la pantalla de inicio.
 - **Servidor:** las notificaciones usan Web Push con claves propias (`vapid.json` en el volumen de datos, se crean
   solas). No hace falta ninguna cuenta externa.

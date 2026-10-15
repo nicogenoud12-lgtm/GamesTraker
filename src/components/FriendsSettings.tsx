@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, BellRing, ChevronRight, Eye, Loader2, Users } from 'lucide-react';
+import { Bell, BellRing, ChevronRight, Loader2, Users } from 'lucide-react';
 import { disablePush, enablePush, getFriends, pushEnabled, saveSocialSettings } from '../lib/social';
 import { useSync } from '../store/useSync';
 import { useToast } from '../store/useToast';
@@ -9,7 +9,7 @@ import { useToast } from '../store/useToast';
 export default function FriendsSettings() {
   const toast = useToast((s) => s.show);
   const username = useSync((s) => s.username);
-  const [settings, setSettings] = useState<{ shareRatings: boolean; announce: boolean } | null>(null);
+  const [settings, setSettings] = useState<{ announce: boolean } | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [push, setPush] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export default function FriendsSettings() {
   useEffect(() => {
     getFriends()
       .then((o) => {
-        setSettings({ shareRatings: o.shareRatings, announce: o.announce });
+        setSettings({ announce: o.announce });
         setCount(o.friends.length);
       })
       .catch(() => setSettings(null));
@@ -26,7 +26,7 @@ export default function FriendsSettings() {
       .catch(() => setPush(false));
   }, []);
 
-  const save = async (patch: { shareRatings?: boolean; announce?: boolean }, key: string) => {
+  const save = async (patch: { announce?: boolean }, key: string) => {
     setBusy(key);
     try {
       setSettings(await saveSocialSettings(patch));
@@ -66,20 +66,13 @@ export default function FriendsSettings() {
         <span>{count == null ? 'Tus amigos e invitaciones' : count ? `Tus amigos (${count}) e invitaciones` : 'Invitá a tus amigos'}</span>
         <ChevronRight size={18} className="text-muted" />
       </Link>
+      <p className="mt-2 text-xs text-muted">Con qué amigos compartís tus puntajes lo elegís en Amigos, uno por uno. Arranca apagado para todos.</p>
       {settings ? (
-        <div className="mt-2 divide-y divide-white/5">
-          <Toggle
-            icon={<Eye size={18} />}
-            title="Mis amigos ven mis puntajes"
-            text="Lo que puntuás aparece en la sección Amigos y en cada ficha. Nunca se ven tus notas."
-            on={settings.shareRatings}
-            busy={busy === 'share'}
-            onChange={() => save({ shareRatings: !settings.shareRatings }, 'share')}
-          />
+        <div className="mt-1 divide-y divide-white/5">
           <Toggle
             icon={<BellRing size={18} />}
             title="Avisarles cuando puntúo algo"
-            text={`Les llega "${username} le puso 92 a Hades" a los amigos que tengan las notificaciones prendidas.`}
+            text={`Les llega "${username} le puso 92 a Hades" a los amigos con los que compartís tus puntajes.`}
             on={settings.announce}
             busy={busy === 'announce'}
             onChange={() => save({ announce: !settings.announce }, 'announce')}
