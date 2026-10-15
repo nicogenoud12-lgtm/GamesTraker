@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Download, Loader2, Share2 } from 'lucide-react';
 import Sheet from './Sheet';
 import { canShareFiles, downloadImage, shareImage, toBlob } from '../lib/shareImage';
@@ -10,10 +10,12 @@ interface Props {
   filename: string;
   /** Draws the image; called each time the sheet opens. */
   render: () => Promise<HTMLCanvasElement>;
+  /** Extra content under the buttons (e.g. a link to share). */
+  children?: ReactNode;
 }
 
 /** Preview of a generated story image with share / download buttons. */
-export default function ShareSheet({ open, onClose, title, filename, render }: Props) {
+export default function ShareSheet({ open, onClose, title, filename, render, children }: Props) {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export default function ShareSheet({ open, onClose, title, filename, render }: P
           <Download size={18} /> Descargar
         </button>
       </div>
+      {children}
     </Sheet>
   );
 }

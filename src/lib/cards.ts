@@ -11,10 +11,10 @@ import {
   roundRect,
   wrapText,
 } from './shareImage';
-import { TIER_BY_ID } from './tiers';
+import { TIERS, TIER_BY_ID } from './tiers';
 import type { Game, Rating } from './types';
 
-// The two shareable images: one rating, and the year in review.
+// The shareable images: one rating, the year in review and the whole tier list.
 
 const ACCENT: Record<Mode, [string, string]> = { games: ['#a78bfa', '#f472b6'], screen: ['#fbbf24', '#fb7185'] };
 
@@ -244,5 +244,113 @@ export async function yearCard(s: YearSummary): Promise<HTMLCanvasElement> {
   ctx.font = '400 30px "Inter Variable"';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.fillText(`Mi año en ${MODES[s.mode].brand}Tracker`, W / 2, H - 80);
+  return canvas;
+}
+
+export interface TierEntry {
+  game: Game;
+  score: number;
+  tier: Rating['tier'];
+}
+
+/** The whole tier list as one tall image: a row per tier, covers wrapping inside it. */
+export async function tierCard(entries: TierEntry[], mode: Mode, title: string, subtitle: string): Promise<HTMLCanvasElement> {
+  await loadFonts();
+  const sorted = [...entries].sort((x, y) => y.score - x.score);
+  const covers = new Map<string, HTMLImageElement | null>();
+  await Promise.all(sorted.map(async (e) => covers.set(e.game.id, await loadImage(coverUrl(e.game)))));
+
+  const pad = 48;
+  const labelW = 170;
+  const gap = 10;
+  const cols = sorted.length <= 30 ? 6 : sorted.length <= 90 ? 8 : 10;
+  const areaX = pad + labelW + 14;
+  const areaW = W - areaX - pad - gap;
+  const cw = (areaW - gap * (cols - 1)) / cols;
+  const ch = cw * (4 / 3);
+  const tiers = [...TIERS].reverse().map((t) => ({ tier: t, items: sorted.filter((e) => e.tier === t.id) }));
+  const rows = tiers.filter((r) => r.items.length);
+  const rowH = (n: number) => Math.max(150, Math.ceil(n / cols) * (ch + gap) + gap);
+  const top = 300;
+  const height = top + rows.reduce((h, r) => h + rowH(r.items.length) + 16, 0) + 120;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+  const [a, b] = ACCENT[mode];
+  ctx.fillStyle = '#0b0b10';
+  ctx.fillRect(0, 0, W, height);
+  const glow = ctx.createRadialGradient(W / 2, 0, 40, W / 2, 0, 900);
+  glow.addColorStop(0, `${a}55`);
+  glow.addColorStop(0.6, `${b}18`);
+  glow.addColorStop(1, '#0b0b1000');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, 900);
+
+  ctx.textAlign = 'center';
+  drawLogo(ctx, 100, a, MODES[mode].brand, 40);
+  ctx.font = '700 76px "Space Grotesk"';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(title, W / 2, 200);
+  ctx.font = '400 34px "Inter Variable"';
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText(subtitle, W / 2, 252);
+
+  let y = top;
+  for (const { tier, items } of rows) {
+    const h = rowH(items.length);
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    roundRect(ctx, pad, y, W - pad * 2, h, 26);
+    ctx.fill();
+    ctx.strokeStyle = `${tier.color}55`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const label = ctx.createLinearGradient(pad, y, pad + labelW, y + h);
+    label.addColorStop(0, tier.color);
+    label.addColorStop(1, `${tier.color}cc`);
+    ctx.fillStyle = label;
+    roundRect(ctx, pad, y, labelW, h, 26);
+    ctx.fill();
+    const cy = y + h / 2;
+    ctx.textAlign = 'center';
+    ctx.font = '56px sans-serif';
+    ctx.fillText(tier.emoji, pad + labelW / 2, cy - 4);
+    ctx.fillStyle = '#0b0b10';
+    ctx.font = '700 32px "Space Grotesk"';
+    ctx.fillText(tier.label, pad + labelW / 2, cy + 42);
+    ctx.font = '700 24px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillText(String(items.length), pad + labelW / 2, cy + 74);
+
+    items.forEach((e, i) => {
+      const x = areaX + (i % cols) * (cw + gap);
+      const cyTop = y + gap + Math.floor(i / cols) * (ch + gap);
+      drawCover(ctx, covers.get(e.game.id) ?? null, x, cyTop, cw, ch, 12, [`${tier.color}66`, '#14121c']);
+      if (!covers.get(e.game.id)) {
+        // No cover: the title, so the slot still says what it is.
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.font = '700 17px "Space Grotesk"';
+        ctx.fillStyle = '#ffffff';
+        wrapText(ctx, e.game.name, cw - 16, 4).forEach((line, k) => ctx.fillText(line, x + 8, cyTop + 26 + k * 20));
+        ctx.restore();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
+      roundRect(ctx, x + cw - 48, cyTop + ch - 34, 42, 28, 8);
+      ctx.fill();
+      ctx.textAlign = 'center';
+      ctx.font = '700 20px "Space Grotesk"';
+      ctx.fillStyle = tier.color;
+      ctx.fillText(String(e.score), x + cw - 27, cyTop + ch - 13);
+    });
+    y += h + 16;
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = '400 28px "Inter Variable"';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText(`Hecha con ${MODES[mode].brand}Tracker`, W / 2, height - 50);
   return canvas;
 }
