@@ -55,13 +55,27 @@ docker compose up -d --build
 En Cloudflare (**Networking → Tunnels → tu túnel → Routes**) agregar una ruta
 `juegos.genoud-nube.com.ar` → `http://10.0.0.69:3030`.
 
-Actualizar después de mergear un PR:
+Actualizar a mano después de mergear un PR:
 
 ```bash
 cd /home/genoud/GamesTraker
 git pull origin main
 docker compose up -d --build
 ```
+
+#### Actualización automática
+
+`deploy/auto-update.sh` se fija si `main` cambió en GitHub y, si cambió, lo baja y reconstruye. Si no hay
+nada nuevo no hace nada, y si un build falla lo reintenta en la próxima pasada. Para que corra solo cada
+2 minutos (una sola vez, en el servidor):
+
+```bash
+cd /home/genoud/GamesTraker && git pull origin main
+(crontab -l 2>/dev/null | grep -v auto-update.sh; echo '*/2 * * * * /home/genoud/GamesTraker/deploy/auto-update.sh >> /home/genoud/gamestraker-deploy.log 2>&1') | crontab -
+```
+
+Desde ahí, cada PR mergeado queda en el servidor en unos minutos. Para ver qué hizo:
+`tail /home/genoud/gamestraker-deploy.log`. Para apagarlo: `crontab -l | grep -v auto-update.sh | crontab -`.
 
 ### Cuentas y sincronización
 
