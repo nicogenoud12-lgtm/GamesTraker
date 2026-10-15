@@ -1,6 +1,7 @@
 import { Check, Plus } from 'lucide-react';
 import { useState } from 'react';
 import Sheet from './Sheet';
+import ListIcon from './ListIcon';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
@@ -32,7 +33,7 @@ export default function ListPickerSheet({ game, open, onClose }: Props) {
   const create = () => {
     const name = newName.trim();
     if (!name) return;
-    const id = createList(name, '📁');
+    const id = createList(name, 'bookmark');
     addToList(id, game);
     setNewName('');
     toast(`Agregado a ${name}`);
@@ -49,7 +50,7 @@ export default function ListPickerSheet({ game, open, onClose }: Props) {
                 onClick={() => toggle(l.id, l.name, inList)}
                 className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${inList ? 'border-accent/60 bg-accent/10' : 'border-line bg-surface-2'}`}
               >
-                <span className="text-xl">{l.emoji}</span>
+                <ListIcon list={l} size="sm" />
                 <span className="flex-1">
                   <span className="block font-semibold">{l.name}</span>
                   <span className="text-xs text-muted">

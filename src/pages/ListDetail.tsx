@@ -21,6 +21,7 @@ import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowLeft, GripVertical, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
 import Cover from '../components/Cover';
+import ListIcon, { LIST_ICONS, iconFor } from '../components/ListIcon';
 import { ScoreBadge } from '../components/Score';
 import Sheet from '../components/Sheet';
 import { year } from '../lib/format';
@@ -87,15 +88,17 @@ export default function ListDetail() {
             </button>
           )}
         </div>
-        <div className="px-1 pb-3">
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            <span className="mr-2">{list.emoji}</span>
-            {list.name}
-          </h1>
-          <p className="text-sm text-muted">
-            {items.length} {items.length === 1 ? 'juego' : 'juegos'}
-            {items.length > 1 && ' · Mantené apretado y arrastrá para ordenar'}
-          </p>
+        <div className="flex items-center gap-4 px-1 pb-3">
+          <ListIcon list={list} size="lg" />
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl font-bold tracking-tight">
+              {list.name}
+            </h1>
+            <p className="text-sm text-muted">
+              {items.length} {items.length === 1 ? 'juego' : 'juegos'}
+              {items.length > 1 && ' · Mantené apretado y arrastrá para ordenar'}
+            </p>
+          </div>
         </div>
       </header>
 
@@ -141,6 +144,19 @@ export default function ListDetail() {
           onChange={(e) => setName(e.target.value)}
           className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5"
         />
+        <div className="mt-3 grid grid-cols-8 gap-1.5">
+          {Object.keys(LIST_ICONS).map((id) => (
+            <button
+              key={id}
+              onClick={() => updateList(list.id, { emoji: id })}
+              aria-label={LIST_ICONS[id].label}
+              title={LIST_ICONS[id].label}
+              className={`flex justify-center rounded-xl py-1.5 transition ${iconFor(list) === LIST_ICONS[id] ? 'bg-white/10 ring-2 ring-accent' : 'hover:bg-white/5'}`}
+            >
+              <ListIcon list={{ id: '', emoji: id }} size="sm" />
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => {
             if (name.trim()) updateList(list.id, { name: name.trim() });
@@ -148,7 +164,7 @@ export default function ListDetail() {
           }}
           className="mt-3 w-full rounded-2xl bg-white py-3.5 font-bold text-black"
         >
-          Guardar nombre
+          Guardar
         </button>
         <button
           onClick={() => {

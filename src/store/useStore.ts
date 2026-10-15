@@ -7,8 +7,8 @@ export const NEXT_LIST_ID = 'next';
 export const PLAYING_LIST_ID = 'playing';
 
 const SYSTEM_LISTS: GameList[] = [
-  { id: PLAYING_LIST_ID, name: 'Jugando ahora', emoji: '🎮', gameIds: [], system: true, createdAt: 0, updatedAt: 0 },
-  { id: NEXT_LIST_ID, name: 'Próximos a jugar', emoji: '⏭️', gameIds: [], system: true, createdAt: 1, updatedAt: 0 },
+  { id: PLAYING_LIST_ID, name: 'Jugando ahora', emoji: 'playing', gameIds: [], system: true, createdAt: 0, updatedAt: 0 },
+  { id: NEXT_LIST_ID, name: 'Próximos a jugar', emoji: 'next', gameIds: [], system: true, createdAt: 1, updatedAt: 0 },
 ];
 
 interface State {
