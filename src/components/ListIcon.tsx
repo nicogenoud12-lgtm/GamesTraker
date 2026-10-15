@@ -1,5 +1,12 @@
 import {
   Bookmark,
+  Clapperboard,
+  Drama,
+  Film,
+  Laugh,
+  MonitorPlay,
+  Popcorn,
+  Tv,
   CarFront,
   Crown,
   Flame,
@@ -20,7 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { GameList } from '../lib/types';
-import { NEXT_LIST_ID, PLAYING_LIST_ID } from '../store/useStore';
+import { NEXT_LIST_ID, PLAYING_LIST_ID, TOWATCH_LIST_ID, WATCHING_LIST_ID } from '../lib/mode';
 
 interface IconDef {
   icon: LucideIcon;
@@ -47,11 +54,19 @@ export const LIST_ICONS: Record<string, IconDef> = {
   crown: { icon: Crown, label: 'Clásicos', from: '#eab308', to: '#ca8a04' },
   flame: { icon: Flame, label: 'Hype', from: '#fb923c', to: '#dc2626' },
   sparkles: { icon: Sparkles, label: 'Joyitas', from: '#c084fc', to: '#ec4899' },
+  film: { icon: Film, label: 'Películas', from: '#f59e0b', to: '#ef4444' },
+  tv: { icon: Tv, label: 'Series', from: '#38bdf8', to: '#6366f1' },
+  popcorn: { icon: Popcorn, label: 'Para el finde', from: '#fbbf24', to: '#fb7185' },
+  clapperboard: { icon: Clapperboard, label: 'Cine', from: '#71717a', to: '#18181b' },
+  laugh: { icon: Laugh, label: 'Comedia', from: '#facc15', to: '#84cc16' },
+  drama: { icon: Drama, label: 'Drama', from: '#a855f7', to: '#e11d48' },
 };
 
 const SYSTEM: Record<string, IconDef> = {
   [PLAYING_LIST_ID]: { icon: Gamepad2, label: 'Jugando ahora', from: '#22c55e', to: '#0d9488' },
   [NEXT_LIST_ID]: { icon: Layers, label: 'Próximos a jugar', from: '#8b5cf6', to: '#ec4899' },
+  [WATCHING_LIST_ID]: { icon: MonitorPlay, label: 'Viendo ahora', from: '#f97316', to: '#e11d48' },
+  [TOWATCH_LIST_ID]: { icon: Popcorn, label: 'Quiero ver', from: '#fbbf24', to: '#f97316' },
 };
 
 // Lists created before icons existed stored an emoji; map them to the closest icon.
@@ -84,7 +99,7 @@ export default function ListIcon({ list, size = 'md' }: { list: Pick<GameList, '
       aria-hidden="true"
     >
       <Icon size={s.icon} strokeWidth={2.2} />
-      {list.id === PLAYING_LIST_ID && (
+      {(list.id === PLAYING_LIST_ID || list.id === WATCHING_LIST_ID) && (
         <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
           <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-bg bg-emerald-300" />

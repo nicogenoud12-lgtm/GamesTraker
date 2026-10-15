@@ -48,9 +48,14 @@ const ENTRIES: DemoEntry[] = [
   { slug: 'doom-eternal', name: 'DOOM Eternal', released: '2020-03-20', genres: ['Shooter'], platforms: ['PC', 'PlayStation 4', 'Xbox One'], developer: 'id Software', description: 'El Slayer vuelve para arrasar con el infierno en la Tierra.', hue: 15 },
 ];
 
-function coverSvg(e: DemoEntry): string {
-  const a = `hsl(${e.hue} 70% 45%)`;
-  const b = `hsl(${(e.hue + 40) % 360} 60% 14%)`;
+function coverSvg(e: { hue: number }): string {
+  return generatedCover(e.hue);
+}
+
+/** Gradient placeholder cover for demo items (no official artwork can be bundled). */
+export function generatedCover(hue: number): string {
+  const a = `hsl(${hue} 70% 45%)`;
+  const b = `hsl(${(hue + 40) % 360} 60% 14%)`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400"><defs><linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient><radialGradient id="r" cx="0.8" cy="0.15" r="0.7"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><rect width="300" height="400" fill="url(#g)"/><rect width="300" height="400" fill="url(#r)"/><circle cx="240" cy="330" r="120" fill="#000" opacity=".18"/></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }

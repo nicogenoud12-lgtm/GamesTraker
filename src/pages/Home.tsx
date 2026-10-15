@@ -9,7 +9,10 @@ import ScrollRow from '../components/ScrollRow';
 import { ScoreBadge, TierChip } from '../components/Score';
 import { TIERS } from '../lib/tiers';
 import { playingDay, year } from '../lib/format';
-import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
+import { MODES, modeOf } from '../lib/mode';
+import ModeSwitch from '../components/ModeSwitch';
 import { useToast } from '../store/useToast';
 import { useIsDesktop } from '../lib/useMedia';
 import type { Game, Rating } from '../lib/types';
@@ -26,18 +29,22 @@ export default function Home() {
   const toast = useToast((s) => s.show);
   const isDesktop = useIsDesktop();
 
-  const rated = Object.values(ratings).sort((a, b) => b.updatedAt - a.updatedAt);
+  const mode = useMode();
+  const copy = MODES[mode];
+  const rated = Object.values(ratings)
+    .filter((r) => modeOf(r.gameId) === mode)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
   const avg = rated.length ? Math.round(rated.reduce((n, r) => n + r.score, 0) / rated.length) : 0;
   const legendary = rated.filter((r) => r.tier === 'historico').length;
-  const playing = (lists.find((l) => l.id === PLAYING_LIST_ID)?.gameIds ?? []).map((id) => games[id]).filter(Boolean);
-  const nextIds = lists.find((l) => l.id === NEXT_LIST_ID)?.gameIds ?? [];
+  const playing = (lists.find((l) => l.id === copy.nowListId)?.gameIds ?? []).map((id) => games[id]).filter(Boolean);
+  const nextIds = lists.find((l) => l.id === copy.nextListId)?.gameIds ?? [];
   const next = nextIds.map((id) => games[id]).filter(Boolean);
   const upNext = next[0];
 
   const startPlaying = () => {
     if (!upNext) return;
-    addToList(PLAYING_LIST_ID, upNext);
-    removeFromList(NEXT_LIST_ID, upNext.id);
+    addToList(copy.nowListId, upNext);
+    removeFromList(copy.nextListId, upNext.id);
     toast(`¡A jugar ${upNext.name}!`);
   };
 
@@ -56,7 +63,7 @@ export default function Home() {
     <div>
       <div className="relative">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-72 opacity-70 [mask-image:linear-gradient(to_bottom,black,transparent)]">
-          <Aurora colorStops={['#7c3aed', '#f472b6', '#22d3ee']} amplitude={1.1} blend={0.6} speed={0.6} mouseInteraction={false} />
+          <Aurora key={mode} colorStops={copy.glow} amplitude={1.1} blend={0.6} speed={0.6} mouseInteraction={false} />
         </div>
         <header className="pt-safe relative px-5">
           <div className="flex items-center justify-between pt-6">
@@ -71,8 +78,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-2">
-            <Stat label="Jugados" value={rated.length} />
+          <ModeSwitch className="mt-5" />
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <Stat label={mode === 'games' ? 'Jugados' : 'Vistos'} value={rated.length} />
             <Stat label="Promedio" value={avg} />
             <Stat label="Históricos" value={legendary} />
           </div>
@@ -83,12 +92,12 @@ export default function Home() {
 
       {rated.length === 0 && next.length === 0 && playing.length === 0 && (
         <section className="mx-5 mt-6 rounded-3xl border border-line bg-surface p-6 text-center">
-          <p className="text-4xl">🎮</p>
-          <h2 className="mt-3 font-display text-xl font-bold">Empezá tu colección</h2>
-          <p className="mt-1 text-sm text-muted">Buscá un juego que hayas jugado para puntuarlo, o agregalo a tu lista de próximos.</p>
+          <p className="text-4xl">{mode === 'games' ? '🎮' : '🍿'}</p>
+          <h2 className="mt-3 font-display text-xl font-bold">{copy.emptyTitle}</h2>
+          <p className="mt-1 text-sm text-muted">{copy.emptyText}</p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Link to="/buscar" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
-              <Search size={18} /> Buscar juegos
+              <Search size={18} /> {mode === 'games' ? 'Buscar juegos' : 'Buscar series y pelis'}
             </Link>
             <Link to="/descubrir" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-semibold">
               <Compass size={18} /> Descubrir
@@ -99,7 +108,7 @@ export default function Home() {
 
       {playing.length > 0 && (
         <section className="mt-7">
-          <SectionTitle title="Jugando ahora" to={`/listas/${PLAYING_LIST_ID}`} />
+          <SectionTitle title={copy.nowLabel} to={`/listas/${copy.nowListId}`} />
           <ScrollRow className="flex gap-3 px-5 pb-1">
             {playing.map((g) => (
               <Link key={g.id} to={`/juego/${encodeURIComponent(g.id)}`} className="w-28 shrink-0">
@@ -114,7 +123,7 @@ export default function Home() {
 
       {upNext && (
         <section className="mt-7 px-5">
-          <SectionTitle title="Lo próximo" to={`/listas/${NEXT_LIST_ID}`} flush />
+          <SectionTitle title="Lo próximo" to={`/listas/${copy.nextListId}`} flush />
           <div className="relative overflow-hidden rounded-3xl border border-line bg-surface">
             <Cover game={upNext} size={640} showTitle={false} className="absolute inset-0 scale-110 opacity-40 blur-2xl" />
             <div className="relative flex gap-4 p-4">
@@ -129,7 +138,7 @@ export default function Home() {
                   onClick={startPlaying}
                   className="mt-auto inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-95"
                 >
-                  <Play size={14} fill="currentColor" /> Empezar a jugar
+                  <Play size={14} fill="currentColor" /> {copy.start}
                 </button>
               </div>
             </div>
@@ -255,23 +264,25 @@ interface DesktopProps {
 
 /** Wide dashboard for the browser: hero for the next game, posters and a side column. */
 function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, counts, starts, onStart }: DesktopProps) {
+  const mode = useMode();
+  const copy = MODES[mode];
   const empty = rated.length === 0 && next.length === 0 && playing.length === 0;
   const recent = rated.filter((r) => games[r.gameId]).slice(0, 8);
 
   return (
     <div className="relative">
       <div className="pointer-events-none absolute -top-0 -right-6 -left-6 h-64 opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]">
-        <Aurora colorStops={['#7c3aed', '#f472b6', '#22d3ee']} amplitude={1.1} blend={0.6} speed={0.5} mouseInteraction={false} />
+        <Aurora key={mode} colorStops={copy.glow} amplitude={1.1} blend={0.6} speed={0.5} mouseInteraction={false} />
       </div>
 
       <header className="relative flex items-end justify-between gap-6 pt-10">
         <div>
           <p className="text-muted">{greeting()}</p>
-          <h1 className="font-display text-4xl font-bold tracking-tight">Tu biblioteca</h1>
+          <h1 className="font-display text-4xl font-bold tracking-tight">{mode === 'games' ? 'Tus juegos' : 'Tus series y pelis'}</h1>
         </div>
         <div className="flex gap-3">
           {[
-            { label: 'Jugados', value: rated.length },
+            { label: mode === 'games' ? 'Jugados' : 'Vistos', value: rated.length },
             { label: 'Promedio', value: avg },
             { label: 'Históricos', value: legendary },
           ].map((t) => (
@@ -290,12 +301,12 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
       {empty && (
         <section className="relative mt-8 flex items-center justify-between gap-6 rounded-3xl border border-line bg-surface p-8">
           <div>
-            <h2 className="font-display text-2xl font-bold">Empezá tu colección 🎮</h2>
-            <p className="mt-1 text-muted">Buscá un juego que hayas jugado para puntuarlo, o agregalo a tu lista de próximos.</p>
+            <h2 className="font-display text-2xl font-bold">{copy.emptyTitle}</h2>
+            <p className="mt-1 text-muted">{copy.emptyText}</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <Link to="/buscar" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-black">
-              <Search size={18} /> Buscar juegos
+              <Search size={18} /> {mode === 'games' ? 'Buscar juegos' : 'Buscar series y pelis'}
             </Link>
             <Link to="/descubrir" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-semibold">
               <Compass size={18} /> Descubrir
@@ -322,7 +333,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
                   onClick={onStart}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 font-semibold text-black transition hover:brightness-90"
                 >
-                  <Play size={16} fill="currentColor" /> Empezar a jugar
+                  <Play size={16} fill="currentColor" /> {copy.start}
                 </button>
                 <Link
                   to={`/juego/${encodeURIComponent(upNext.id)}`}
@@ -340,7 +351,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
         <div className="space-y-10">
           {playing.length > 0 && (
             <section>
-              <DesktopTitle title="Jugando ahora" to={`/listas/${PLAYING_LIST_ID}`} />
+              <DesktopTitle title={copy.nowLabel} to={`/listas/${copy.nowListId}`} />
               <div className="grid grid-cols-4 gap-4">
                 {playing.slice(0, 4).map((g) => (
                   <DesktopPoster key={g.id} game={g} caption={playingDay(starts[g.id])} />
@@ -388,7 +399,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
 
           {next.length > 1 && (
             <div className="rounded-3xl border border-line bg-surface p-5">
-              <DesktopTitle title="Después" to={`/listas/${NEXT_LIST_ID}`} />
+              <DesktopTitle title="Después" to={`/listas/${copy.nextListId}`} />
               <ol className="space-y-2.5">
                 {next.slice(1, 6).map((g, i) => (
                   <li key={g.id}>
@@ -405,10 +416,10 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
 
           <Link
             to="/descubrir"
-            className="block rounded-3xl border border-accent/30 bg-gradient-to-br from-violet-500/20 to-pink-500/10 p-5 transition hover:border-accent/60"
+            className="block rounded-3xl border border-accent/30 bg-gradient-to-br from-accent/20 to-accent-2/10 p-5 transition hover:border-accent/60"
           >
             <Compass className="text-accent" />
-            <p className="mt-3 font-display text-lg font-bold">¿Qué juego sigue?</p>
+            <p className="mt-3 font-display text-lg font-bold">{copy.discoverCta}</p>
             <p className="text-sm text-muted">Recomendaciones según tus gustos, lo mejor del año y más.</p>
           </Link>
         </aside>

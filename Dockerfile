@@ -6,6 +6,8 @@ RUN npm ci --fetch-retries=5 --fetch-retry-mintimeout=10000 --fetch-retry-maxtim
 COPY . .
 ARG VITE_RAWG_KEY=
 ENV VITE_RAWG_KEY=$VITE_RAWG_KEY
+ARG VITE_TMDB_KEY=
+ENV VITE_TMDB_KEY=$VITE_TMDB_KEY
 RUN npm run build
 
 FROM nginx:alpine

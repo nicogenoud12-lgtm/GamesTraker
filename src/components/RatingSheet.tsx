@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import Sheet from './Sheet';
-import { STATUSES, TIERS, TIER_BY_ID, tierForScore } from '../lib/tiers';
+import { TIERS, TIER_BY_ID, tierForScore } from '../lib/tiers';
+import { STREAMING, kindOf, statusOptions } from '../lib/mode';
 import type { Game, PlayStatus, Replay, TierId } from '../lib/types';
 import { daysBetween } from '../lib/format';
 import { useStore } from '../store/useStore';
@@ -79,7 +80,7 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
       tier,
       status,
       platform: platform || null,
-      startedAt: startedAt || null,
+      startedAt: kind === 'movie' ? null : startedAt || null,
       finishedAt: finishedAt || null,
       hours: parseHours(hours),
       replay,
@@ -96,6 +97,11 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
   };
 
   const color = TIER_BY_ID[tier].color;
+  const kind = kindOf(game.id);
+  const statuses = statusOptions(game.id);
+  const platformChoices = kind
+    ? [...STREAMING.map((p) => p.label), ...(kind === 'movie' ? ['Cine'] : []), 'TV abierta / cable', 'Otro']
+    : game.platforms;
   const took = startedAt && finishedAt ? daysBetween(startedAt, finishedAt) : null;
   const hoursValue = parseHours(hours);
 
@@ -186,8 +192,8 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
       </div>
 
       <h3 className="mt-6 mb-2 text-sm font-semibold">Estado</h3>
-      <div className="grid grid-cols-3 rounded-2xl bg-white/5 p-1">
-        {STATUSES.map((s) => (
+      <div className="grid rounded-2xl bg-white/5 p-1" style={{ gridTemplateColumns: `repeat(${statuses.length}, 1fr)` }}>
+        {statuses.map((s) => (
           <button
             key={s.id}
             onClick={() => setStatus(s.id)}
@@ -200,19 +206,20 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold">Plataforma</span>
+          <span className="mb-1.5 block text-sm font-semibold">{kind ? 'Dónde la viste' : 'Plataforma'}</span>
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value)}
             className="w-full rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-sm"
           >
             <option value="">—</option>
-            {game.platforms.map((p) => (
+            {platformChoices.map((p) => (
               <option key={p}>{p}</option>
             ))}
-            {platform && !game.platforms.includes(platform) && <option>{platform}</option>}
+            {platform && !platformChoices.includes(platform) && <option>{platform}</option>}
           </select>
         </label>
+        {!kind && (
         <label className="block">
           <span className="mb-1.5 block text-sm font-semibold">Horas jugadas</span>
           <div className="relative">
@@ -226,8 +233,20 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted">h</span>
           </div>
         </label>
+        )}
+        {kind === 'movie' && (
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold">La vi el</span>
+            <input
+              type="date"
+              value={finishedAt}
+              onChange={(e) => setFinishedAt(e.target.value)}
+              className="w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm [color-scheme:dark]"
+            />
+          </label>
+        )}
       </div>
-      {avgHours ? (
+      {!kind && avgHours ? (
         <p className="mt-1.5 text-right text-xs text-muted">
           Promedio en RAWG: {avgHours} h
           {hoursValue != null && hoursValue > 0 && (
@@ -236,9 +255,10 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
         </p>
       ) : null}
 
+      {kind !== 'movie' && (
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold">Lo empecé</span>
+          <span className="mb-1.5 block text-sm font-semibold">{kind ? 'La empecé' : 'Lo empecé'}</span>
           <input
             type="date"
             value={startedAt}
@@ -248,7 +268,9 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
           />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold">{status === 'abandonado' ? 'Lo dejé' : 'Lo terminé'}</span>
+          <span className="mb-1.5 block text-sm font-semibold">
+            {kind ? (status === 'abandonado' ? 'La dejé' : status === 'completado' ? 'Último capítulo' : 'La terminé') : status === 'abandonado' ? 'Lo dejé' : 'Lo terminé'}
+          </span>
           <input
             type="date"
             value={finishedAt}
@@ -258,14 +280,15 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
           />
         </label>
       </div>
-      {took != null && took >= 0 && (
+      )}
+      {kind !== 'movie' && took != null && took >= 0 && (
         <p className="mt-1.5 text-xs text-muted">
           Te llevó <span className="font-semibold text-white/80">{took === 0 ? 'un día' : `${took + 1} días`}</span>
-          {startedOn && startedOn === startedAt && !existing?.startedAt && ' · fecha de inicio tomada de cuando lo pusiste en "Jugando ahora"'}
+          {startedOn && startedOn === startedAt && !existing?.startedAt && ` · fecha de inicio tomada de cuando ${kind ? 'la pusiste en "Viendo ahora"' : 'lo pusiste en "Jugando ahora"'}`}
         </p>
       )}
 
-      <h3 className="mt-5 mb-2 text-sm font-semibold">¿Lo volverías a jugar?</h3>
+      <h3 className="mt-5 mb-2 text-sm font-semibold">{kind ? '¿La volverías a ver?' : '¿Lo volverías a jugar?'}</h3>
       <div className="grid grid-cols-3 rounded-2xl bg-white/5 p-1">
         {REPLAY.map((r) => (
           <button

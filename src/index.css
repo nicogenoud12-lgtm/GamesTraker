@@ -13,6 +13,12 @@
   --color-accent-2: #f472b6;
 }
 
+/* Series & movies mode swaps the accent colours (set on <html data-mode>). */
+:root[data-mode='screen'] {
+  --color-accent: #fbbf24;
+  --color-accent-2: #fb7185;
+}
+
 html,
 body,
 #root {

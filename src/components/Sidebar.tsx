@@ -1,7 +1,10 @@
 import { Link, NavLink } from 'react-router-dom';
-import { BarChart3, Cloud, CloudOff, Compass, Gamepad2, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
+import { BarChart3, Cloud, CloudOff, Compass, House, ListOrdered, LogIn, RefreshCw, Search, Settings } from 'lucide-react';
+import ModeSwitch from './ModeSwitch';
+import { MODES } from '../lib/mode';
+import { useMode } from '../store/useUi';
 import Cover from './Cover';
-import { NEXT_LIST_ID, useStore } from '../store/useStore';
+import { useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
 
 const NAV = [
@@ -9,16 +12,19 @@ const NAV = [
   { to: '/descubrir', label: 'Descubrir', icon: Compass, end: false },
   { to: '/buscar', label: 'Buscar', icon: Search, end: false },
   { to: '/listas', label: 'Listas', icon: ListOrdered, end: false },
-  { to: '/mis-juegos', label: 'Mis juegos', icon: Gamepad2, end: false },
   { to: '/estadisticas', label: 'Estadísticas', icon: BarChart3, end: false },
 ];
 
 /** Desktop navigation (lg and up); phones use the bottom TabBar instead. */
 export default function Sidebar() {
+  const mode = useMode();
+  const copy = MODES[mode];
   const upNext = useStore((s) => {
-    const id = s.lists.find((l) => l.id === NEXT_LIST_ID)?.gameIds[0];
+    const id = s.lists.find((l) => l.id === copy.nextListId)?.gameIds[0];
     return id ? s.games[id] : undefined;
   });
+  const nav = [...NAV];
+  nav.splice(4, 0, { to: '/mis-juegos', label: copy.collection, icon: copy.icon, end: false });
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0d0d13] px-4 py-6 lg:flex">
@@ -26,8 +32,10 @@ export default function Sidebar() {
         Games<span className="grad-text">Traker</span>
       </Link>
 
-      <nav className="mt-8 space-y-1">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+      <ModeSwitch compact className="mt-5" />
+
+      <nav className="mt-6 space-y-1">
+        {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

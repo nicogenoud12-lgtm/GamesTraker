@@ -4,16 +4,28 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import GameRow from '../components/GameRow';
 import ScrollRow from '../components/ScrollRow';
 import { useIsDesktop } from '../lib/useMedia';
-import { discoverGames, effectiveKey } from '../lib/catalog';
-import { type DiscoverFilters, GENRES, ORDERS, PERIODS, PLATFORMS, filtersFromParams, filtersToParams } from '../lib/discover';
+import { discoverItems, keyFor, useKeys } from '../lib/catalog';
+import {
+  type DiscoverFilters,
+  KINDS,
+  ORDERS,
+  PERIODS,
+  filtersFromParams,
+  filtersToParams,
+  genreOptions,
+  platformOptions,
+} from '../lib/discover';
+import { MODES } from '../lib/mode';
 import type { Game } from '../lib/types';
-import { useStore } from '../store/useStore';
+import { useMode } from '../store/useUi';
 
 export default function Explore() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const filters = filtersFromParams(params);
-  const key = effectiveKey(useStore((s) => s.apiKey));
+  const mode = useMode();
+  const keys = useKeys();
+  const key = keyFor(mode, keys);
+  const filters = filtersFromParams(params, mode);
   const [games, setGames] = useState<Game[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -26,7 +38,7 @@ export default function Explore() {
     setLoading(true);
     setError(null);
     if (page === 1) setGames([]);
-    discoverGames(key, filters, page, ctrl.signal)
+    discoverItems(mode, keys, filters, page, ctrl.signal)
       .then((r) => {
         setGames((prev) => (page === 1 ? r.games : [...prev, ...r.games.filter((g) => !prev.some((p) => p.id === g.id))]));
         setHasMore(r.hasMore);
@@ -35,11 +47,14 @@ export default function Explore() {
       .finally(() => !ctrl.signal.aborted && setLoading(false));
     return () => ctrl.abort();
     // `filters` is rebuilt every render; `id` captures its contents.
-  }, [key, id, page]);
+  }, [mode, key, id, page]);
 
   const update = (patch: Partial<DiscoverFilters>) => {
     setPage(1);
-    setParams(filtersToParams({ ...filters, ...patch }), { replace: true });
+    const next = { ...filters, ...patch };
+    // A genre that doesn't exist for the new kind (e.g. "Terror" for series) is dropped.
+    if (!genreOptions(mode, next.kind).some((g) => g.slug === next.genre)) next.genre = null;
+    setParams(filtersToParams(next, mode), { replace: true });
   };
 
   return (
@@ -59,21 +74,30 @@ export default function Explore() {
               </Chip>
             ))}
           </ChipRow>
+          {mode === 'screen' && (
+            <ChipRow label="Tipo">
+              {KINDS.map((k) => (
+                <Chip key={k.id} active={filters.kind === k.id} onClick={() => update({ kind: k.id })}>
+                  {k.label}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
           <ChipRow label="Género">
             <Chip active={!filters.genre} onClick={() => update({ genre: null })}>
               Todos
             </Chip>
-            {GENRES.map((g) => (
+            {genreOptions(mode, filters.kind).map((g) => (
               <Chip key={g.slug} active={filters.genre === g.slug} onClick={() => update({ genre: g.slug })}>
                 {g.label}
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="Plataforma">
+          <ChipRow label={mode === 'games' ? 'Plataforma' : 'Dónde ver'}>
             <Chip active={!filters.platform} onClick={() => update({ platform: null })}>
               Todas
             </Chip>
-            {PLATFORMS.map((p) => (
+            {platformOptions(mode).map((p) => (
               <Chip key={p.id} active={filters.platform === p.id} onClick={() => update({ platform: p.id })}>
                 {p.label}
               </Chip>
@@ -92,7 +116,7 @@ export default function Explore() {
       <div className="px-5 lg:px-0">
         {error && <p className="mt-6 text-center text-sm text-rose-400">{error}</p>}
         {!loading && !error && games.length === 0 && (
-          <p className="mt-10 text-center text-muted">No hay juegos con estos filtros.</p>
+          <p className="mt-10 text-center text-muted">No hay {MODES[mode].items} con estos filtros.</p>
         )}
         <ul className="divide-y divide-white/5 xl:grid xl:grid-cols-2 xl:gap-x-8 xl:divide-y-0">
           {games.map((g, i) => (

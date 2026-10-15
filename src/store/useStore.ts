@@ -3,18 +3,35 @@ import { persist } from 'zustand/middleware';
 import { uid } from '../lib/format';
 import type { Game, GameList, Rating } from '../lib/types';
 
-export const NEXT_LIST_ID = 'next';
-export const PLAYING_LIST_ID = 'playing';
+import {
+  MODES,
+  NEXT_LIST_ID,
+  PLAYING_LIST_ID,
+  TOWATCH_LIST_ID,
+  WATCHING_LIST_ID,
+  modeOf,
+  type Mode,
+} from '../lib/mode';
+
+export { NEXT_LIST_ID, PLAYING_LIST_ID, TOWATCH_LIST_ID, WATCHING_LIST_ID };
 
 const SYSTEM_LISTS: GameList[] = [
-  { id: PLAYING_LIST_ID, name: 'Jugando ahora', emoji: 'playing', gameIds: [], system: true, createdAt: 0, updatedAt: 0 },
-  { id: NEXT_LIST_ID, name: 'Próximos a jugar', emoji: 'next', gameIds: [], system: true, createdAt: 1, updatedAt: 0 },
+  { id: PLAYING_LIST_ID, name: 'Jugando ahora', emoji: 'playing', gameIds: [], system: true, mode: 'games', createdAt: 0, updatedAt: 0 },
+  { id: NEXT_LIST_ID, name: 'Próximos a jugar', emoji: 'next', gameIds: [], system: true, mode: 'games', createdAt: 1, updatedAt: 0 },
+  { id: WATCHING_LIST_ID, name: 'Viendo ahora', emoji: 'watching', gameIds: [], system: true, mode: 'screen', createdAt: 2, updatedAt: 0 },
+  { id: TOWATCH_LIST_ID, name: 'Quiero ver', emoji: 'towatch', gameIds: [], system: true, mode: 'screen', createdAt: 3, updatedAt: 0 },
 ];
+
+/** "Jugando ahora" / "Viendo ahora": being in one records the start date. */
+const NOW_LISTS = new Set([PLAYING_LIST_ID, WATCHING_LIST_ID]);
 
 interface State {
   apiKey: string;
   /** When the key was last changed, so the newest one wins when syncing. */
   apiKeyUpdatedAt: number;
+  /** TMDB key for series & movies, synced like the RAWG one. */
+  tmdbKey: string;
+  tmdbKeyUpdatedAt: number;
   /** Day each game was moved to "Jugando ahora" (YYYY-MM-DD), to prefill the start date. */
   starts: Record<string, string>;
   /** Local snapshots of every game the user has rated or listed. */
@@ -26,11 +43,12 @@ interface State {
   listTombs: Record<string, number>;
 
   setApiKey: (key: string) => void;
+  setTmdbKey: (key: string) => void;
   rememberGame: (game: Game) => void;
   saveRating: (game: Game, rating: Omit<Rating, 'gameId' | 'createdAt' | 'updatedAt'>) => void;
   deleteRating: (gameId: string) => void;
 
-  createList: (name: string, emoji: string) => string;
+  createList: (name: string, emoji: string, mode: Mode) => string;
   updateList: (id: string, patch: Partial<Pick<GameList, 'name' | 'emoji'>>) => void;
   deleteList: (id: string) => void;
   addToList: (listId: string, game: Game, position?: 'top' | 'bottom') => void;
@@ -55,6 +73,8 @@ export const useStore = create<State>()(
     (set) => ({
       apiKey: '',
       apiKeyUpdatedAt: 0,
+      tmdbKey: '',
+      tmdbKeyUpdatedAt: 0,
       starts: {},
       games: {},
       ratings: {},
@@ -63,6 +83,7 @@ export const useStore = create<State>()(
       listTombs: {},
 
       setApiKey: (apiKey) => set({ apiKey, apiKeyUpdatedAt: Date.now() }),
+      setTmdbKey: (tmdbKey) => set({ tmdbKey, tmdbKeyUpdatedAt: Date.now() }),
 
       rememberGame: (game) => set((s) => ({ games: { ...s.games, [game.id]: snapshot(game) } })),
 
@@ -80,7 +101,8 @@ export const useStore = create<State>()(
             lists: prev
               ? s.lists
               : s.lists.map((l) =>
-                  (l.id === NEXT_LIST_ID || l.id === PLAYING_LIST_ID) && l.gameIds.includes(game.id)
+                  (l.id === MODES[modeOf(game.id)].nowListId || l.id === MODES[modeOf(game.id)].nextListId) &&
+                  l.gameIds.includes(game.id)
                     ? { ...l, gameIds: l.gameIds.filter((id) => id !== game.id), updatedAt: now }
                     : l,
                 ),
@@ -94,10 +116,10 @@ export const useStore = create<State>()(
           return { ratings, ratingTombs: { ...s.ratingTombs, [gameId]: Date.now() } };
         }),
 
-      createList: (name, emoji) => {
+      createList: (name, emoji, mode) => {
         const id = uid();
         const now = Date.now();
-        set((s) => ({ lists: [...s.lists, { id, name, emoji, gameIds: [], system: false, createdAt: now, updatedAt: now }] }));
+        set((s) => ({ lists: [...s.lists, { id, name, emoji, gameIds: [], system: false, mode, createdAt: now, updatedAt: now }] }));
         return id;
       },
 
@@ -113,7 +135,7 @@ export const useStore = create<State>()(
         set((s) => ({
           games: { ...s.games, [game.id]: snapshot(game) },
           starts:
-            listId === PLAYING_LIST_ID && !s.starts[game.id]
+            NOW_LISTS.has(listId) && !s.starts[game.id]
               ? { ...s.starts, [game.id]: new Date().toISOString().slice(0, 10) }
               : s.starts,
           lists: s.lists.map((l) => {
@@ -157,9 +179,17 @@ export const useStore = create<State>()(
     }),
     {
       name: 'gamestraker',
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const s = persisted as Partial<State>;
+        if (version < 4) {
+          // Series & movies arrive with their own fixed lists.
+          const lists = s.lists ?? [];
+          for (const sys of SYSTEM_LISTS) if (!lists.some((l) => l.id === sys.id)) lists.push(sys);
+          s.lists = lists;
+          s.tmdbKey = s.tmdbKey ?? '';
+          s.tmdbKeyUpdatedAt = s.tmdbKeyUpdatedAt ?? 0;
+        }
         if (version < 3) {
           s.starts = s.starts ?? {};
           // A key typed before syncing existed should win over devices that have none.
