@@ -2,12 +2,21 @@ import type { Game, GameDetail } from './types';
 
 const API = 'https://api.rawg.io/api';
 
+export interface RawgTag {
+  id: number;
+  name: string;
+  slug: string;
+  language?: string;
+  games_count?: number;
+}
+
 interface RawgGame {
   id: number;
   name: string;
   background_image: string | null;
   released: string | null;
   genres?: { name: string }[];
+  tags?: RawgTag[];
   platforms?: { platform: { name: string } }[] | null;
   metacritic?: number | null;
   /** Users' average, 0–5. */
@@ -17,7 +26,7 @@ interface RawgGame {
 
 interface RawgDetail extends RawgGame {
   description_raw?: string;
-  developers?: { name: string }[];
+  developers?: { id: number; name: string }[];
   publishers?: { name: string }[];
   metacritic: number | null;
   metacritic_platforms?: { metascore: number }[];
@@ -158,4 +167,33 @@ export async function rawgDiscover(
 export async function rawgSeries(key: string, rawgId: string, signal?: AbortSignal): Promise<Game[]> {
   const data = await get<{ results: RawgGame[] }>(key, `/games/${rawgId}/game-series`, { page_size: '40' }, signal);
   return data.results.map(toGame);
+}
+
+/** What a rated game says about the player's taste: its tags, genres and studios. */
+export interface TasteFacts {
+  tags: RawgTag[];
+  genres: string[];
+  developers: { id: number; name: string }[];
+}
+
+export async function rawgTasteFacts(key: string, rawgId: string, signal?: AbortSignal): Promise<TasteFacts> {
+  const g = await get<RawgDetail>(key, `/games/${rawgId}`, {}, signal);
+  return {
+    tags: (g.tags ?? []).map(({ id, name, slug, language, games_count }) => ({ id, name, slug, language, games_count })),
+    genres: (g.genres ?? []).map((x) => x.name),
+    developers: (g.developers ?? []).map(({ id, name }) => ({ id, name })),
+  };
+}
+
+export interface Candidate {
+  game: Game;
+  tags: RawgTag[];
+  rating: number;
+  ratingsCount: number;
+}
+
+/** A page of games with the raw data recommendations rank them by. */
+export async function rawgCandidates(key: string, params: Record<string, string>, signal?: AbortSignal): Promise<Candidate[]> {
+  const data = await get<{ results: RawgGame[] }>(key, '/games', { page_size: '40', ...params }, signal);
+  return data.results.map((g) => ({ game: toGame(g), tags: g.tags ?? [], rating: g.rating ?? 0, ratingsCount: g.ratings_count ?? 0 }));
 }

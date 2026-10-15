@@ -10,10 +10,12 @@ interface Props {
   games: Game[] | null;
   error?: string | null;
   more?: string;
+  /** Per-game line shown instead of year · genre (e.g. why it was recommended). */
+  notes?: Record<string, string>;
 }
 
 /** Horizontal row of game covers with a "see all" link. Hidden when empty. */
-export default function GameRail({ title, subtitle, games, error, more }: Props) {
+export default function GameRail({ title, subtitle, games, error, more, notes }: Props) {
   if (games && games.length === 0 && !error) return null;
   return (
     <section className="mt-7">
@@ -32,7 +34,7 @@ export default function GameRail({ title, subtitle, games, error, more }: Props)
         <p className="px-5 text-sm text-rose-400">{error}</p>
       ) : (
         <ScrollRow className="flex gap-3 px-5 pb-1">
-          {games ? games.map((g) => <GameCard key={g.id} game={g} />) : Array.from({ length: 4 }, (_, i) => <GameCardSkeleton key={i} />)}
+          {games ? games.map((g) => <GameCard key={g.id} game={g} note={notes?.[g.id]} />) : Array.from({ length: 4 }, (_, i) => <GameCardSkeleton key={i} />)}
         </ScrollRow>
       )}
     </section>

@@ -7,6 +7,7 @@ import ScrollRow from '../components/ScrollRow';
 import { type Keys, discoverItems, keyFor, recommendItems, trendingItems, useKeys } from '../lib/catalog';
 import { type DiscoverFilters, DEFAULT_FILTERS, GENRES, SCREEN_GENRES, exploreLink } from '../lib/discover';
 import { MODES, STREAMING, listMode, modeOf, type Mode } from '../lib/mode';
+import { gameProfile, recommendFromProfile } from '../lib/taste';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
@@ -83,19 +84,39 @@ function useTaste(mode: Mode) {
 
 function ForYou({ mode, keys }: { mode: Mode; keys: Keys }) {
   const { genres, favourites, because, known } = useTaste(mode);
+  const ratings = useStore((s) => s.ratings);
+  const snapshots = useStore((s) => s.games);
   const [games, setGames] = useState<Game[] | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [likes, setLikes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const key = keyFor(mode, keys);
-  const tasteKey = `${genres.join('|')}/${favourites.join('|')}`;
+  // With RAWG, games get a real taste profile (tags, studios) from every rating.
+  const personal = mode === 'games' && Boolean(keys.rawg);
+  const tasteKey = personal
+    ? Object.values(ratings)
+        .filter((r) => r.gameId.startsWith('rawg:'))
+        .map((r) => `${r.gameId}:${r.score}:${r.status}:${r.replay ?? ''}`)
+        .sort()
+        .join('|')
+    : `${genres.join('|')}/${favourites.join('|')}`;
 
   useEffect(() => {
     if (!genres.length && !favourites.length) return;
     const ctrl = new AbortController();
     setGames(null);
     setError(null);
-    recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal)
-      .then(setGames)
-      .catch((e: Error) => e.name !== 'AbortError' && setError(e.message));
+    setNotes({});
+    const run = personal
+      ? gameProfile(keys.rawg, Object.values(ratings), snapshots, ctrl.signal).then(async (profile) => {
+          if (!profile) return recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal);
+          setLikes(profile.top);
+          const r = await recommendFromProfile(keys.rawg, profile, known, ctrl.signal);
+          setNotes(r.notes);
+          return r.games;
+        })
+      : recommendItems(mode, keys, { genres, favourites }, known, ctrl.signal);
+    run.then(setGames).catch((e: Error) => e.name !== 'AbortError' && setError(e.message));
     return () => ctrl.abort();
     // Recompute only when the taste changes, not on every list edit.
   }, [mode, key, tasteKey]);
@@ -112,8 +133,15 @@ function ForYou({ mode, keys }: { mode: Mode; keys: Keys }) {
   return (
     <GameRail
       title="Para vos"
-      subtitle={because.length ? `Porque te gustó ${because.join(' y ')}` : undefined}
+      subtitle={
+        personal && likes.length
+          ? `Te gusta: ${likes.join(', ')}`
+          : because.length
+            ? `Porque te gustó ${because.join(' y ')}`
+            : undefined
+      }
       games={visible}
+      notes={notes}
       error={error}
     />
   );

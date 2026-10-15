@@ -5,7 +5,7 @@ import { year } from '../lib/format';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
 
-export default function GameCard({ game }: { game: Game }) {
+export default function GameCard({ game, note }: { game: Game; note?: string }) {
   const rating = useStore((s) => s.ratings[game.id]);
   const rememberGame = useStore((s) => s.rememberGame);
   return (
@@ -25,7 +25,11 @@ export default function GameCard({ game }: { game: Game }) {
         )}
       </div>
       <p className="mt-1.5 line-clamp-2 text-sm leading-tight font-medium">{game.name}</p>
-      <p className="mt-0.5 text-xs text-muted">{[year(game.released), game.genres[0]].filter(Boolean).join(' · ')}</p>
+      {note ? (
+        <p className="mt-0.5 line-clamp-1 text-xs text-accent">{note}</p>
+      ) : (
+        <p className="mt-0.5 text-xs text-muted">{[year(game.released), game.genres[0]].filter(Boolean).join(' · ')}</p>
+      )}
     </Link>
   );
 }
