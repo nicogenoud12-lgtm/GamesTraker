@@ -43,4 +43,6 @@ export interface GameList {
   gameIds: string[];
   system: boolean;
   createdAt: number;
+  /** Bumped on every change so devices can merge lists when syncing. */
+  updatedAt: number;
 }

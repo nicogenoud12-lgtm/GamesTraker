@@ -4,3 +4,4 @@ dev-dist
 .git
 .github
 *.log
+server

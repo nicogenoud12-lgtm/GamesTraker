@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { startSync } from './lib/sync';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
 import Home from './pages/Home';
@@ -13,6 +15,8 @@ import Explore from './pages/Explore';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
+  useEffect(() => startSync(), []);
+
   return (
     <div className="mx-auto min-h-dvh max-w-lg pb-28">
       <ScrollToTop />

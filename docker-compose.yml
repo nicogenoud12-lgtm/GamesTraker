@@ -7,4 +7,18 @@ services:
         - VITE_RAWG_KEY=${VITE_RAWG_KEY:-}
     ports:
       - "3030:80"
+    depends_on:
+      - api
     restart: unless-stopped
+
+  # Guarda puntajes y listas para sincronizar entre dispositivos.
+  api:
+    build: ./server
+    environment:
+      - SYNC_TOKEN=${SYNC_TOKEN:-}
+    volumes:
+      - gamestraker_data:/data
+    restart: unless-stopped
+
+volumes:
+  gamestraker_data:
