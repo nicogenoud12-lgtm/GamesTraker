@@ -1,4 +1,5 @@
 import { mergeData, stableStringify, type SyncData } from './merge';
+import type { Game, GameList, Rating } from './types';
 import { useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
 
@@ -113,6 +114,36 @@ export async function changePassword(current: string, next: string): Promise<voi
   const r = await api<{ token: string }>('POST', '/auth/password', { current, next });
   useSync.setState({ token: r.token });
 }
+
+export interface Profile {
+  username: string;
+  public: boolean;
+}
+
+export async function getProfile(): Promise<Profile> {
+  return (await api<{ user: Profile }>('GET', '/auth/me')).user;
+}
+
+/** Turns the read-only public profile (#/p/usuario) on or off. */
+export async function setProfilePublic(value: boolean): Promise<Profile> {
+  return (await api<{ user: Profile }>('POST', '/profile', { public: value })).user;
+}
+
+/** What the server shares of a public profile: no notes, platforms or keys. */
+export interface PublicProfile {
+  username: string;
+  updatedAt: string | null;
+  games: Record<string, Game>;
+  ratings: Record<string, Pick<Rating, 'gameId' | 'score' | 'tier' | 'status' | 'finishedAt'>>;
+  lists: (Pick<GameList, 'id' | 'name' | 'emoji' | 'mode' | 'system' | 'gameIds'>)[];
+}
+
+export function fetchPublicProfile(username: string): Promise<PublicProfile> {
+  return api<PublicProfile>('GET', `/public/${encodeURIComponent(username)}`, undefined, '');
+}
+
+/** The shareable link to someone's public profile in this app. */
+export const profileUrl = (username: string) => `${window.location.origin}${window.location.pathname}#/p/${encodeURIComponent(username)}`;
 
 let running = false;
 let again = false;

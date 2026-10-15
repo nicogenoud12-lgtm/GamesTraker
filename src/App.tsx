@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { startSync } from './lib/sync';
 import { useMode } from './store/useUi';
 import { MODES } from './lib/mode';
@@ -18,6 +18,7 @@ import Explore from './pages/Explore';
 import Stats from './pages/Stats';
 import YearReview from './pages/YearReview';
 import Diary from './pages/Diary';
+import PublicProfile from './pages/PublicProfile';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 import CoverTransition from './components/CoverTransition';
@@ -30,6 +31,20 @@ export default function App() {
     // The tab is named after the side in use: GamesTracker / MediaTracker.
     document.title = `${MODES[mode].brand}Tracker`;
   }, [mode]);
+  const { pathname } = useLocation();
+
+  // Someone else's public profile is shown on its own, without this device's navigation.
+  if (pathname.startsWith('/p/')) {
+    return (
+      <>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/p/:username" element={<PublicProfile />} />
+        </Routes>
+        <Toast />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-dvh lg:overflow-x-clip lg:pl-64">
