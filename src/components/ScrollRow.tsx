@@ -23,14 +23,23 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
     const update = () =>
       setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
 
+    // While the wheel keeps turning after it moved the row, the row holds on to it,
+    // so reaching the end stops there instead of spilling the rest into the page.
+    const LATCH_MS = 300;
+    let latchedUntil = 0;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const now = performance.now();
       const canLeft = el.scrollLeft > 0;
       const canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-      // Only hijack the wheel while the row can still move that way, so the page keeps scrolling at the ends.
       if ((e.deltaY > 0 && canRight) || (e.deltaY < 0 && canLeft)) {
         e.preventDefault();
         el.scrollLeft += e.deltaY;
+        latchedUntil = now + LATCH_MS;
+      } else if (now < latchedUntil) {
+        // Same gesture, row at its end: swallow it. A fresh turn after a pause scrolls the page.
+        e.preventDefault();
+        latchedUntil = now + LATCH_MS;
       }
     };
 
@@ -92,7 +101,7 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
 
   return (
     <div className={`group/row relative ${wrapperClassName}`}>
-      <div ref={ref} className={`no-scrollbar overflow-x-auto ${className}`}>
+      <div ref={ref} className={`no-scrollbar overflow-x-auto overscroll-x-contain ${className}`}>
         {children}
       </div>
       {edges.left && (
