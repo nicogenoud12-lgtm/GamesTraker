@@ -5,6 +5,7 @@ import GameRow from '../components/GameRow';
 import { DEMO_GAMES } from '../data/demo';
 import { DEMO_SCREEN } from '../data/demoScreen';
 import { keyFor, popularItems, searchItems, useKeys } from '../lib/catalog';
+import { loadGameIndex, searchGameIndex } from '../lib/gameIndex';
 import { MODES } from '../lib/mode';
 import { useIsDesktop } from '../lib/useMedia';
 import type { Game } from '../lib/types';
@@ -25,6 +26,16 @@ export default function Search() {
   const key = keyFor(mode, keys);
   const copy = MODES[mode];
   const inputRef = useRef<HTMLInputElement>(null);
+  // Popular games are found while typing; RAWG's search adds the rest a moment later.
+  const [indexReady, setIndexReady] = useState(false);
+  useEffect(() => {
+    if (mode !== 'games' || !keys.rawg) return;
+    let alive = true;
+    loadGameIndex().then((i) => alive && setIndexReady(Boolean(i)));
+    return () => {
+      alive = false;
+    };
+  }, [mode, keys.rawg]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -48,21 +59,29 @@ export default function Search() {
       return;
     }
     const ctrl = new AbortController();
+    const instant = mode === 'games' && keys.rawg ? searchGameIndex(q) : [];
+    if (instant.length) {
+      setResults(instant);
+      setError(null);
+    }
     const t = setTimeout(() => {
       setLoading(true);
       searchItems(mode, keys, q, ctrl.signal)
         .then((r) => {
-          setResults(r);
+          // What was already on screen stays in place; RAWG's other finds go after it.
+          const shown = new Set(instant.map((g) => g.id));
+          setResults([...instant, ...r.filter((g) => !shown.has(g.id))]);
           setError(null);
         })
-        .catch((e: Error) => e.name !== 'AbortError' && setError(e.message))
+        // With instant results on screen, a failed RAWG search just leaves them.
+        .catch((e: Error) => e.name !== 'AbortError' && !instant.length && setError(e.message))
         .finally(() => setLoading(false));
     }, 300);
     return () => {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [query, key, mode, setParams]);
+  }, [query, key, mode, setParams, indexReady]);
 
   const searching = query.trim().length >= 2;
 

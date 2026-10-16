@@ -14,7 +14,7 @@ import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/pro
 import path from 'node:path';
 import readline from 'node:readline';
 import { Readable } from 'node:stream';
-import { createGunzip } from 'node:zlib';
+import { createGunzip, gzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
 import { generateVapidKeys, sendPush } from './webpush.mjs';
 
@@ -658,6 +658,111 @@ async function gameCovers(list) {
   }
   saveCoversSoon();
   return out;
+}
+
+// ---------- popular games index ----------
+// RAWG's search takes a couple of seconds. The most popular games (the ones the
+// most people have in their RAWG library, about the top 10,000) are kept here as
+// one compact file that the app downloads once, so typing finds them instantly.
+// Rebuilt weekly; RAWG's key comes from the environment or, failing that, from
+// an account that saved one in Ajustes.
+
+const RAWG_API = process.env.RAWG_API_URL ?? 'https://api.rawg.io/api';
+const INDEX_FILE = path.join(DATA_DIR, 'games-index.json');
+const INDEX_PAGES = Math.max(1, Number(process.env.GAMES_INDEX_PAGES) || 250);
+const INDEX_MAX_AGE = 7 * 864e5;
+const RAWG_MEDIA = 'https://media.rawg.io/media/';
+let gamesIndex = null;
+let indexBuilding = false;
+
+async function rawgKey() {
+  const env = process.env.RAWG_KEY || process.env.VITE_RAWG_KEY;
+  if (env) return env;
+  for (const u of (await loadUsers()).users) {
+    const key = (await readData(u.id)).settings?.apiKey?.trim();
+    if (key) return key;
+  }
+  return null;
+}
+
+/** One game, short: id, name, release, image (without RAWG's prefix), genres, platforms, score. */
+function indexEntry(g) {
+  const score = g.metacritic || (g.rating && (g.ratings_count ?? 0) >= 20 ? Math.round(g.rating * 20) : null);
+  return [
+    g.id,
+    str(g.name, 200),
+    g.released ?? null,
+    g.background_image?.startsWith(RAWG_MEDIA) ? g.background_image.slice(RAWG_MEDIA.length) : (g.background_image ?? null),
+    (g.genres ?? []).slice(0, 3).map((x) => x.name),
+    (g.platforms ?? []).slice(0, 4).map((x) => x.platform?.name).filter(Boolean),
+    score ?? null,
+    g.metacritic ? 0 : score ? 1 : 0,
+  ];
+}
+
+function loadIndexData(data) {
+  const body = Buffer.from(JSON.stringify({ builtAt: data.builtAt, media: RAWG_MEDIA, games: data.games }));
+  gamesIndex = { builtAt: data.builtAt, count: data.games.length, etag: `"${data.builtAt}"`, gzip: gzipSync(body), body };
+}
+
+async function buildGamesIndex() {
+  if (indexBuilding) return;
+  indexBuilding = true;
+  try {
+    const key = await rawgKey();
+    if (!key) return;
+    const games = [];
+    const seen = new Set();
+    for (let page = 1; page <= INDEX_PAGES; page++) {
+      const qs = new URLSearchParams({ key, ordering: '-added', page_size: '40', page: String(page), exclude_additions: 'true' });
+      const res = await fetch(`${RAWG_API}/games?${qs}`, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
+      if (!res?.ok) break;
+      const json = await res.json().catch(() => null);
+      for (const g of json?.results ?? []) {
+        if (!g?.id || seen.has(g.id)) continue;
+        seen.add(g.id);
+        games.push(indexEntry(g));
+      }
+      if (!json?.next) break;
+      // RAWG is free for personal use; no need to hurry it.
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    // A run cut short (RAWG down, quota) only replaces a smaller index.
+    if (games.length < Math.min(1000, INDEX_PAGES * 40) && games.length <= (gamesIndex?.count ?? 0)) return;
+    const data = { builtAt: Date.now(), games };
+    await serial(() => writeJson(INDEX_FILE, data));
+    loadIndexData(data);
+    console.log(`Índice de juegos: ${games.length} juegos`);
+  } catch (e) {
+    console.error(`índice de juegos: ${e.message}`);
+  } finally {
+    indexBuilding = false;
+  }
+}
+
+async function refreshGamesIndex() {
+  if (!gamesIndex) {
+    const saved = await readJson(INDEX_FILE, null);
+    if (saved?.games?.length) loadIndexData(saved);
+  }
+  if (!gamesIndex || Date.now() - gamesIndex.builtAt > INDEX_MAX_AGE) await buildGamesIndex();
+}
+
+function sendGamesIndex(req, res) {
+  if (!gamesIndex) return send(res, 404, { error: 'El índice de juegos todavía no está listo' });
+  if (req.headers['if-none-match'] === gamesIndex.etag) {
+    res.writeHead(304, { ETag: gamesIndex.etag });
+    return res.end();
+  }
+  const gzip = /\bgzip\b/.test(req.headers['accept-encoding'] ?? '');
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    ETag: gamesIndex.etag,
+    // Kept by the browser; asked again (cheaply, with the ETag) at most every few hours.
+    'Cache-Control': 'private, max-age=14400',
+    ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
+  });
+  res.end(gzip ? gamesIndex.gzip : gamesIndex.body);
 }
 
 // ---------- Rotten Tomatoes ----------
@@ -1452,6 +1557,8 @@ async function handle(req, res) {
         return { status: 200, body: { version: next.version, updatedAt: next.updatedAt }, events: user.announce && (user.sharesWith ?? []).length ? newRatings(doc.data, body.data) : [] };
       });
       send(res, out.status, out.body);
+      // A RAWG key just saved in Ajustes is enough to build the games index.
+      if (out.status === 200 && !gamesIndex && body.data?.settings?.apiKey && process.env.GAMES_INDEX !== 'off') void refreshGamesIndex();
       // Friends hear about new ratings after the device already got its answer.
       if (out.events?.length) announce(user, out.events).catch((e) => console.error('announce', e));
       return;
@@ -1527,6 +1634,9 @@ async function handle(req, res) {
         .filter((g) => g.id && /^rawg:\d+$/.test(g.id) && g.name);
       return send(res, 200, { covers: await gameCovers(list) });
     }
+    case 'GET /api/games/index':
+      await authenticate(req);
+      return sendGamesIndex(req, res);
     case 'GET /api/rt': {
       await authenticate(req);
       const id = url.searchParams.get('imdb') ?? '';
@@ -1578,6 +1688,11 @@ if (process.argv[2] === 'reset-password') {
 }
 
 if (process.env.IMDB !== 'off') refreshImdb();
+// The popular games index: loaded (or built) on start, and checked twice a day.
+if (process.env.GAMES_INDEX !== 'off') {
+  void refreshGamesIndex();
+  setInterval(() => void refreshGamesIndex(), 12 * 3600 * 1000);
+}
 if (traktEnabled()) setInterval(() => void traktCheckAll(), TRAKT_POLL_MS).unref?.();
 
 http
