@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Repeat2, Share2, Star, Youtube } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
@@ -117,14 +117,14 @@ export default function GamePage() {
     };
   }, [gameId, key]);
 
-  // Steam users' rating, plus Metacritic from Steam when RAWG lacks it.
+  // Every critics' and players' score our server finds: Metacritic, IGDB and Steam.
   const [scores, setScores] = useState<Scores | null>(null);
   const isGame = mode === 'games' && detail != null;
   useEffect(() => {
     setScores(null);
     if (!isGame || !detail) return;
     let alive = true;
-    gameScores(detail.name, detail.released, detail.steamAppId).then((s) => alive && setScores(s));
+    gameScores(detail.name, detail.released, detail.steamAppId, detail.metacriticSlug).then((s) => alive && setScores(s));
     return () => {
       alive = false;
     };
@@ -140,9 +140,11 @@ export default function GamePage() {
       alive = false;
     };
   }, [isGame, detail?.id]);
-  const hasMetacritic = detail?.metacritic != null && !detail.scoreLabel;
-  const critic = hasMetacritic ? null : scores?.critic;
   const steam = scores?.steam;
+  // Metacritic's critics from its page, else RAWG's copy of it.
+  const mc = scores?.metacritic;
+  const mcCritic = mc?.critic ?? (isGame && detail?.metacritic != null && !detail.scoreLabel ? detail.metacritic : null);
+  const igdb = scores?.igdb;
 
   const [imdb, setImdb] = useState<ImdbRating | null>(null);
   const imdbId = detail?.imdbId;
@@ -278,32 +280,28 @@ export default function GamePage() {
           {g}
         </span>
       ))}
-      {detail?.metacritic != null &&
-        (detail.scoreLabel === 'TMDB' ? (
-          <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-            TMDB {detail.metacritic}%
-          </span>
-        ) : (
-          <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300" title="Promedio de la crítica en Metacritic">
-            Crítica · {detail.scoreLabel ?? 'Metacritic'} {detail.metacritic}
-          </span>
-        ))}
-      {critic && (
-        <a
-          href={critic.url ?? undefined}
-          target="_blank"
-          rel="noreferrer"
-          title={
-            critic.source === 'metacritic'
-              ? 'Metacritic de la versión de PC (según Steam)'
-              : critic.reviews
-                ? `Promedio de ${critic.reviews} reseñas de medios (IGDB)`
-                : 'Promedio de reseñas de medios (IGDB)'
-          }
-          className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
-        >
-          Crítica · {critic.source === 'metacritic' ? 'Metacritic' : 'IGDB'} {critic.score}
-        </a>
+      {detail?.metacritic != null && detail.scoreLabel === 'TMDB' && (
+        <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">TMDB {detail.metacritic}%</span>
+      )}
+      {mcCritic != null && (
+        <ScoreChip side="critic" href={mc?.url} title={reviewsTitle('Crítica en Metacritic', mc?.criticReviews, 'reseñas')}>
+          Metacritic · crítica {mcCritic}
+        </ScoreChip>
+      )}
+      {mc?.users != null && (
+        <ScoreChip side="users" href={mc.url} title={reviewsTitle('Usuarios de Metacritic', mc.userReviews, 'votos')}>
+          Metacritic · usuarios {mc.users.toLocaleString('es-AR', { minimumFractionDigits: 1 })}
+        </ScoreChip>
+      )}
+      {igdb?.critic != null && (
+        <ScoreChip side="critic" href={igdb.url} title={reviewsTitle('Promedio de la prensa en IGDB', igdb.criticReviews, 'reseñas')}>
+          IGDB · crítica {igdb.critic}
+        </ScoreChip>
+      )}
+      {igdb?.users != null && (
+        <ScoreChip side="users" href={igdb.url} title={reviewsTitle('Usuarios de IGDB', igdb.userReviews, 'votos')}>
+          IGDB · usuarios {igdb.users}
+        </ScoreChip>
       )}
       {imdb && (
         <a
@@ -339,20 +337,18 @@ export default function GamePage() {
         </a>
       )}
       {steam && (
-        <a
+        <ScoreChip
+          side="users"
           href={steam.url}
-          target="_blank"
-          rel="noreferrer"
           title={`Puntaje de SteamDB: ${steam.positive}% positivas de ${steam.total.toLocaleString('es-AR')} reseñas${steam.label ? ` (${steam.label})` : ''}`}
-          className="rounded-full bg-sky-400/15 px-2.5 py-1 text-xs font-semibold text-sky-300"
         >
-          Jugadores · Steam {steam.rating}%
-        </a>
+          Steam · jugadores {steam.rating}%
+        </ScoreChip>
       )}
-      {!steam && detail?.userScore != null && (
-        <span className="rounded-full bg-sky-400/15 px-2.5 py-1 text-xs font-semibold text-sky-300" title="Promedio de los jugadores en RAWG">
-          Jugadores · {detail.userLabel ?? 'RAWG'} {detail.userScore}
-        </span>
+      {isGame && detail?.userScore != null && (
+        <ScoreChip side="users" title="Promedio de los jugadores en RAWG">
+          {detail.userLabel ?? 'RAWG'} · jugadores {detail.userScore}
+        </ScoreChip>
       )}
     </>
   );
@@ -698,5 +694,24 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-muted">{label}</dt>
       <dd className="mt-0.5 font-medium">{value}</dd>
     </div>
+  );
+}
+
+/** "Crítica en Metacritic: 120 reseñas", or just the label when the count is unknown. */
+function reviewsTitle(label: string, count: number | null | undefined, unit: string) {
+  return count ? `${label}: ${count.toLocaleString('es-AR')} ${unit}` : label;
+}
+
+/** A score chip on the game page: green for critics, blue for players; a link when there's a page to open. */
+function ScoreChip({ side, href, title, children }: { side: 'critic' | 'users'; href?: string | null; title: string; children: ReactNode }) {
+  const className = `rounded-full px-2.5 py-1 text-xs font-semibold ${side === 'critic' ? 'bg-emerald-400/15 text-emerald-300' : 'bg-sky-400/15 text-sky-300'}`;
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" title={title} className={className}>
+      {children}
+    </a>
+  ) : (
+    <span title={title} className={className}>
+      {children}
+    </span>
   );
 }

@@ -45,6 +45,8 @@ export interface GameDetail extends Game {
   tagline?: string;
   /** Steam app id, to look up the Metacritic score Steam shows. */
   steamAppId?: string | null;
+  /** Metacritic's page name ("the-witcher-3-wild-hunt"), when RAWG links it. */
+  metacriticSlug?: string | null;
   /** Rough time to finish it, in hours (game's average playtime, movie runtime, all episodes of a series). */
   hours?: number | null;
   /** IMDb id (tt…) of a movie or series, for its IMDb rating. */

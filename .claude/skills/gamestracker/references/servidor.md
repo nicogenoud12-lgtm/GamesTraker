@@ -51,7 +51,8 @@ Trakt: `GET /api/trakt` (enabled, connected, broken, account, `pending`, `watchi
 (device code) · `/poll` · `/check` (revisar ahora) · `/dismiss {key}` · `/watching {keys}` (marcar agregados a
 Viendo ahora) · `/disconnect`.
 
-Datos externos (con sesión salvo IMDb/img): `GET /api/critics?name&year&steam` · `GET /api/length?name&year` ·
+Datos externos (con sesión salvo IMDb/img): `GET /api/critics?name&year&steam&mc` (`mc` = página de Metacritic; responde
+`score/source` + `steam`, `metacritic` y `igdb` con crítica y usuarios; `METACRITIC_URL` para mocks) · `GET /api/length?name&year` ·
 `POST /api/covers {games:[{id,name,year}]}` (hasta 120, responde `{covers:{id:url|null}}`; los omitidos = no se
 pudo preguntar) · `GET /api/games/index` (gzip + ETag/304, `Cache-Control: private, max-age=14400`) ·
 `GET /api/games/discover?from&to&order=best|popular&genre&platform&page` (IGDB → ids de RAWG; 503 sin IGDB) ·
