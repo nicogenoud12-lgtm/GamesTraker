@@ -163,6 +163,14 @@ servidor busca en [Wikidata](https://www.wikidata.org) la página de Rotten Toma
 y lee los puntajes de ahí. No hace falta configurar nada; si Rotten Tomatoes no responde, la ficha se muestra
 sin esos dos.
 
+### Búsqueda al instante
+
+El servidor arma un índice con los ~10.000 juegos más populares de RAWG (los que más gente tiene en su biblioteca)
+y lo renueva una vez por semana. La app lo baja una vez (~0,5 MB; el navegador lo guarda y solo pregunta cada
+unas horas si cambió) y con eso esos juegos aparecen mientras escribís; los demás llegan de RAWG un momento
+después. Usa la key de RAWG del `.env` (`VITE_RAWG_KEY`) o, si no hay, la que guardaste en Ajustes. Con
+`GAMES_INDEX=off` en el servicio `api` se desactiva.
+
 ### Carátulas de los juegos (IGDB)
 
 RAWG no tiene la tapa de los juegos: solo una imagen horizontal de fondo (muchas veces una captura) y a veces

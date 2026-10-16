@@ -23,6 +23,7 @@ import Friends from './pages/Friends';
 import { startNotices } from './lib/social';
 import { refreshSavedCovers, refreshSavedTitles } from './lib/savedTitles';
 import { useSync } from './store/useSync';
+import { loadGameIndex } from './lib/gameIndex';
 import { useStore } from './store/useStore';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
@@ -37,6 +38,12 @@ export default function App() {
   // Covers come from our server: once signed in.
   const token = useSync((s) => s.token);
   useEffect(() => void refreshSavedCovers(), [token]);
+  // The popular games index, ready before the first search (the browser keeps it between visits).
+  useEffect(() => {
+    if (!token) return;
+    const t = setTimeout(() => void loadGameIndex(), 2000);
+    return () => clearTimeout(t);
+  }, [token]);
   const mode = useMode();
   useEffect(() => {
     document.documentElement.dataset.mode = mode;
