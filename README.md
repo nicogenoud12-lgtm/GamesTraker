@@ -122,12 +122,15 @@ historial de Trakt cada 10 minutos.
 1. **App de Trakt (una vez, en el servidor):**
    - Entrá a <https://trakt.tv/oauth/applications> → **New application**.
    - Nombre: `GamesTracker`. Redirect URI: `urn:ietf:wg:oauth:2.0:oob`.
-   - Copiá el **Client ID** y el **Client Secret** al `.env` del servidor y reiniciá con `docker compose up -d --build`:
+   - Copiá el **Client ID** al `.env` del servidor y reiniciá con `docker compose up -d --build`:
 
    ```bash
    TRAKT_CLIENT_ID=...
-   TRAKT_CLIENT_SECRET=...
    ```
+
+   Las apps nuevas de Trakt no traen **Client Secret** ("Not issued … PKCE"): está bien, no hace falta. Si tu app
+   es vieja y sí tiene uno, podés agregar también `TRAKT_CLIENT_SECRET=...`. El aviso amarillo de "Insecure redirect
+   URIs" se puede ignorar: la app no usa redirecciones, se conecta con un código.
 
 2. **En Nuvio:** Ajustes → Trakt → iniciá sesión con tu cuenta de Trakt.
 3. **En la app:** Ajustes → **Nuvio (con Trakt)** → **Conectar con Trakt**. Entrá a trakt.tv/activate, poné el código

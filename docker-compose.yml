@@ -23,6 +23,7 @@ services:
       - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:-}
       # Trakt, para saber qué terminaste de ver en Nuvio (app de https://trakt.tv/oauth/applications).
       - TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID:-}
+      # Solo si tu app de Trakt tiene secret (las nuevas no lo traen).
       - TRAKT_CLIENT_SECRET=${TRAKT_CLIENT_SECRET:-}
     volumes:
       - gamestraker_data:/data

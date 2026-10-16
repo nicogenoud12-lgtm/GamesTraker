@@ -74,7 +74,7 @@ export default function TraktSettings() {
         <Loader2 size={18} className="mt-3 animate-spin text-muted" />
       ) : !status.enabled ? (
         <p className="mt-3 rounded-2xl bg-surface-2 p-4 text-sm text-muted">
-          Falta configurar Trakt en el servidor (TRAKT_CLIENT_ID y TRAKT_CLIENT_SECRET en el .env). Los pasos están en el
+          Falta configurar Trakt en el servidor (TRAKT_CLIENT_ID en el .env). Los pasos están en el
           README.
         </p>
       ) : code ? (
