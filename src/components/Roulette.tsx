@@ -64,7 +64,8 @@ export default function Roulette({ open, onClose, mode, games, hours, canStart =
   const [spinning, setSpinning] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  const filters = FILTERS[mode];
+  // Only the filters something on this list fits (a movies-only list gets no series filters).
+  const filters = FILTERS[mode].filter((f) => f === any || games.some((g) => f.fits(g, hours[g.id] ?? null)));
   const active = filters.find((f) => f.id === filter) ?? any;
   const pool = games.filter((g) => active.fits(g, hours[g.id] ?? null));
 
