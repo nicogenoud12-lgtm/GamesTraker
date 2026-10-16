@@ -7,6 +7,7 @@ import type { Game } from '../lib/types';
 import { KIND_LABEL, MODES, kindOf, modeOf } from '../lib/mode';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
+import { scoresOf } from '../lib/scores';
 
 export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
   const copy = MODES[modeOf(game.id)];
@@ -18,6 +19,7 @@ export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
   const removeFromList = useStore((s) => s.removeFromList);
   const rememberGame = useStore((s) => s.rememberGame);
   const toast = useToast((s) => s.show);
+  const scores = scoresOf(game);
 
   const toggleQueue = () => {
     if (queued) {
@@ -41,11 +43,18 @@ export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
           <p className="truncate text-sm text-muted">
             {[kind ? KIND_LABEL[kind] : null, year(game.released), shortPlatforms(game.platforms, 2)].filter(Boolean).join(' · ')}
           </p>
-          {(game.genres.length > 0 || game.metacritic != null) && (
+          {(game.genres.length > 0 || scores.critic != null || scores.users != null) && (
             <p className="truncate text-xs text-muted/70">
-              {game.metacritic != null && <span className="mr-1.5 font-semibold text-emerald-300">
-                  {kind || game.scoreLabel ? '★' : 'MC'} {game.metacritic}
-                </span>}
+              {scores.critic != null && (
+                <span className="mr-1.5 font-semibold text-emerald-300" title={`Crítica (${scores.criticFrom})`}>
+                  Crítica {scores.critic}
+                </span>
+              )}
+              {scores.users != null && (
+                <span className="mr-1.5 font-semibold text-sky-300" title={`${kind ? 'Público' : 'Jugadores'} (${scores.usersFrom})`}>
+                  {kind ? '★' : 'Jugadores'} {scores.users}
+                </span>
+              )}
               {game.genres.slice(0, 3).join(', ')}
             </p>
           )}

@@ -47,8 +47,8 @@ export function loadGameIndex(): Promise<Indexed[] | null> {
             released,
             genres,
             platforms,
-            metacritic: score,
-            ...(rawgScore ? { scoreLabel: 'RAWG' } : {}),
+            // The index keeps one score: Metacritic, or RAWG's players when there's none.
+            ...(rawgScore ? { metacritic: null, userScore: score, userLabel: 'RAWG' } : { metacritic: score }),
           },
           words,
           joined: words.replace(/ /g, ''),

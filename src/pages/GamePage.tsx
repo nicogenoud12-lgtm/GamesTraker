@@ -278,12 +278,16 @@ export default function GamePage() {
           {g}
         </span>
       ))}
-      {detail?.metacritic != null && !(steam && detail.scoreLabel === 'RAWG') && (
-        <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-          {detail.scoreLabel === 'RAWG' ? 'Usuarios RAWG' : (detail.scoreLabel ?? 'Metacritic')} {detail.metacritic}
-          {detail.scoreLabel === 'TMDB' && '%'}
-        </span>
-      )}
+      {detail?.metacritic != null &&
+        (detail.scoreLabel === 'TMDB' ? (
+          <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+            TMDB {detail.metacritic}%
+          </span>
+        ) : (
+          <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300" title="Promedio de la crítica en Metacritic">
+            Crítica · {detail.scoreLabel ?? 'Metacritic'} {detail.metacritic}
+          </span>
+        ))}
       {critic && (
         <a
           href={critic.url ?? undefined}
@@ -298,7 +302,7 @@ export default function GamePage() {
           }
           className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
         >
-          {critic.source === 'metacritic' ? 'Metacritic' : 'Críticos'} {critic.score}
+          Crítica · {critic.source === 'metacritic' ? 'Metacritic' : 'IGDB'} {critic.score}
         </a>
       )}
       {imdb && (
@@ -342,8 +346,13 @@ export default function GamePage() {
           title={`Puntaje de SteamDB: ${steam.positive}% positivas de ${steam.total.toLocaleString('es-AR')} reseñas${steam.label ? ` (${steam.label})` : ''}`}
           className="rounded-full bg-sky-400/15 px-2.5 py-1 text-xs font-semibold text-sky-300"
         >
-          Steam {steam.rating}%
+          Jugadores · Steam {steam.rating}%
         </a>
+      )}
+      {!steam && detail?.userScore != null && (
+        <span className="rounded-full bg-sky-400/15 px-2.5 py-1 text-xs font-semibold text-sky-300" title="Promedio de los jugadores en RAWG">
+          Jugadores · {detail.userLabel ?? 'RAWG'} {detail.userScore}
+        </span>
       )}
     </>
   );

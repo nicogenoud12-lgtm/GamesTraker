@@ -148,6 +148,21 @@ export function filterDemoScreen(items: Game[], f: DiscoverFilters): Game[] {
   return out;
 }
 
+/**
+ * Recent periods ranked by critics or popularity come from IGDB through our server:
+ * RAWG barely has Metacritic scores for new games, so "the best of this year" was empty.
+ */
+export function serverDiscoverQuery(f: DiscoverFilters, page: number): URLSearchParams | null {
+  const recent = f.period === 'year' || f.period === 'last-year' || f.period === 'recent' || (f.period === 'upcoming' && f.order === 'popular');
+  if (!recent || (f.order !== 'best' && f.order !== 'popular')) return null;
+  const range = PERIODS.find((p) => p.id === f.period)?.range();
+  if (!range) return null;
+  const q = new URLSearchParams({ from: range[0], to: range[1], order: f.order, page: String(page) });
+  if (f.genre) q.set('genre', f.genre);
+  if (f.platform) q.set('platform', f.platform);
+  return q;
+}
+
 export function toRawgQuery(f: DiscoverFilters): RawgQuery {
   const range = PERIODS.find((p) => p.id === f.period)?.range() ?? null;
   return {

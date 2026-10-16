@@ -14,8 +14,12 @@ export interface Game {
   platforms: string[];
   /** Only present on fresh API results; not kept in local snapshots. */
   metacritic?: number | null;
-  /** Where `metacritic` comes from when it isn't Metacritic (e.g. "TMDB", "RAWG"). */
+  /** Where `metacritic` comes from when it isn't Metacritic (e.g. "TMDB", "IGDB"). */
   scoreLabel?: string;
+  /** Players' average, 0–100, kept apart from the critics' (games). */
+  userScore?: number | null;
+  /** Where `userScore` comes from ("RAWG", "IGDB"). */
+  userLabel?: string;
 }
 
 export interface Provider {

@@ -54,14 +54,10 @@ export function resizeImage(url: string | null, width: 420 | 640 | 1280): string
   );
 }
 
-/**
- * Metacritic when RAWG has it; otherwise its users' average (0–5 → 0–100),
- * which most games have even when the Metacritic field is empty.
- */
-function score(g: RawgGame): { metacritic: number | null; scoreLabel?: string } {
-  if (g.metacritic) return { metacritic: g.metacritic };
-  if (g.rating && (g.ratings_count ?? 0) >= 20) return { metacritic: Math.round(g.rating * 20), scoreLabel: 'RAWG' };
-  return { metacritic: null };
+/** Critics (Metacritic) and RAWG's players (0–5 → 0–100) apart; most games have the players' even without Metacritic. */
+function score(g: RawgGame): { metacritic: number | null; userScore?: number; userLabel?: string } {
+  const users = g.rating && (g.ratings_count ?? 0) >= 20 ? Math.round(g.rating * 20) : null;
+  return { metacritic: g.metacritic || null, ...(users != null ? { userScore: users, userLabel: 'RAWG' } : {}) };
 }
 
 function toGame(g: RawgGame): Game {
