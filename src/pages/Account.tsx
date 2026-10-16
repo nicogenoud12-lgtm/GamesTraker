@@ -89,7 +89,7 @@ export default function Account() {
         {server === null ? (
           <p className="mt-6 rounded-2xl border border-line bg-surface p-4 text-sm text-muted">
             No se encontró el servidor de GamesTracker. Las cuentas funcionan cuando la app corre en tu servidor
-            (juegos.genoud-nube.com.ar).
+            (tracker.genoud-nube.com.ar).
           </p>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-3">

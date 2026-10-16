@@ -53,7 +53,7 @@ docker compose up -d --build
 ```
 
 En Cloudflare (**Networking → Tunnels → tu túnel → Routes**) agregar una ruta
-`juegos.genoud-nube.com.ar` → `http://10.0.0.69:3030`.
+`tracker.genoud-nube.com.ar` → `http://10.0.0.69:3030`.
 
 Actualizar a mano después de mergear un PR:
 
