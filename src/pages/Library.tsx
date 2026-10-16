@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BookOpen, ChevronRight, LayoutGrid, Rows3, Share2 } from 'lucide-react';
 import { KINDS } from '../lib/kinds';
@@ -13,6 +13,7 @@ import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
 import { MODES, kindOf, modeOf } from '../lib/mode';
 import TierIcon from '../components/TierIcon';
+import { useIsDesktop } from '../lib/useMedia';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
@@ -203,17 +204,54 @@ function TierList({ entries, onTier }: { entries: Entry[]; onTier: (id: TierId) 
   );
 }
 
+/** Side margin and gap of a tier row (`mx-4`, `gap-2`), in px. A margin, not padding, so the row clips right after the last whole cover. */
+const ROW_MARGIN = 16;
+const ROW_GAP = 8;
+
+/**
+ * Width that fits a whole number of covers in the row, each at least `min` wide,
+ * so the last visible one is never cut in half; the rest are a scroll away.
+ */
+function useFitWidth(min: number, active: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const inner = el.clientWidth - 2 * ROW_MARGIN;
+      const n = Math.max(1, Math.floor((inner + ROW_GAP) / (min + ROW_GAP)));
+      setWidth((inner - (n - 1) * ROW_GAP) / n);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [min, active]);
+  return [ref, width] as const;
+}
+
 function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTier: (id: TierId) => void }) {
+  // An empty tier renders no row, so measuring starts once it has something.
+  const [ref, width] = useFitWidth(useIsDesktop() ? 92 : 72, entries.length > 0);
   return (
     <TierSection tier={tier} count={entries.length} onOpen={() => onTier(tier.id)}>
-      <ScrollRow wrapperClassName="min-w-0" className="flex gap-2 px-4 pb-3">
-        {entries.map(({ game, rating }) => (
-          <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[72px] shrink-0 lg:w-[92px]" title={game.name}>
-            <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
-            <CoverScore score={rating.score} color={tier.color} />
-          </Link>
-        ))}
-      </ScrollRow>
+      <div ref={ref}>
+        <ScrollRow wrapperClassName="min-w-0" className="mx-4 flex gap-2 pb-3">
+          {entries.map(({ game, rating }) => (
+            <Link
+              key={game.id}
+              to={`/juego/${encodeURIComponent(game.id)}`}
+              className="relative w-[72px] shrink-0 lg:w-[92px]"
+              style={width ? { width } : undefined}
+              title={game.name}
+            >
+              <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
+              <CoverScore score={rating.score} color={tier.color} />
+            </Link>
+          ))}
+        </ScrollRow>
+      </div>
     </TierSection>
   );
 }
