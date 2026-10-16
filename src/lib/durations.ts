@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { type Keys, itemDetail } from './catalog';
+import { gameLength } from './critics';
+import { modeOf } from './mode';
 
 // How long each listed title takes, for the totals of a list and the
-// "¿Qué hago ahora?" roulette. Kept on the device for a month so a list of
-// 30 titles isn't looked up again every visit.
+// "¿Qué hago ahora?" roulette: games from HowLongToBeat (via our server), else
+// RAWG's average; movies and series from TMDB. Kept on the device for a month so
+// a list of 30 titles isn't looked up again every visit.
 
-const KEY = 'gamestraker-durations';
+// "-2": the older cache held RAWG's averages, now replaced by HowLongToBeat's.
+const KEY = 'gamestraker-durations-2';
 const TTL = 30 * 864e5;
 
 type Cache = Record<string, { h: number | null; at: number }>;
@@ -14,6 +18,7 @@ let memory: Cache | null = null;
 function cache(): Cache {
   if (!memory) {
     try {
+      localStorage.removeItem('gamestraker-durations');
       memory = JSON.parse(localStorage.getItem(KEY) ?? '{}');
     } catch {
       memory = {};
@@ -34,9 +39,12 @@ export async function itemHours(keys: Keys, id: string): Promise<number | null> 
   const hit = cache()[id];
   if (hit && Date.now() - hit.at < TTL) return hit.h;
   const detail = await itemDetail(keys, id);
-  const h = detail ? (detail.hours ?? detail.playtime ?? null) : null;
+  let h = detail ? (detail.hours ?? detail.playtime ?? null) : null;
+  // `undefined`: the server couldn't be asked, so RAWG's figure is only for now.
+  const length = detail && modeOf(id) === 'games' ? await gameLength(detail.name, detail.released) : null;
+  if (length) h = length.hours;
   // Without a key there's no detail; don't remember that as "unknown".
-  if (detail) {
+  if (detail && length !== undefined) {
     cache()[id] = { h, at: Date.now() };
     save();
   }

@@ -153,6 +153,23 @@ IMDb no tiene una API gratis, pero publica todos los días un archivo con el pun
 comercial). El servidor lo baja al arrancar y una vez por día (~8 MB) y la ficha muestra "IMDb 8,7" usando el id
 de IMDb que trae TMDB. No hace falta configurar nada; con `IMDB=off` en el servicio `api` se desactiva.
 
+### Rotten Tomatoes (series y pelis)
+
+La ficha también muestra el **Tomatómetro** ("RT críticos 98%") y el **Popcornmeter** ("RT público 96%"). El
+servidor busca en [Wikidata](https://www.wikidata.org) la página de Rotten Tomatoes que corresponde al id de IMDb
+y lee los puntajes de ahí. No hace falta configurar nada; si Rotten Tomatoes no responde, la ficha se muestra
+sin esos dos.
+
+### Cuánto dura un juego (HowLongToBeat)
+
+La ficha de cada juego muestra cuánto dura según [HowLongToBeat](https://howlongtobeat.com): el número grande
+es el de todos los estilos de juego juntos (el mismo que muestra HowLongToBeat arriba de todo) o, si no hay, el
+de historia + extras. Abajo va el detalle: historia, con extras y al 100%. Ese número también se usa para el
+total de horas de las listas y para comparar con lo que tardaste al puntuar.
+
+HowLongToBeat no tiene API oficial y cada tanto cambia cómo busca. Si deja de responder y está configurado
+IGDB (ver abajo), se usa el "time to beat" de IGDB; si no, el promedio de RAWG.
+
 ### Nota de críticos (Steam / IGDB)
 
 RAWG no tiene la nota de Metacritic de muchos juegos. Para esos, el servidor la busca en la tienda de
@@ -161,7 +178,8 @@ sale el **puntaje de los usuarios** ("Steam 89%"), calculado como lo hace SteamD
 positivas, acercado al 50% cuando hay pocas reseñas.
 
 Para juegos que no están en Steam se puede sumar, opcionalmente, la nota de críticos de
-[IGDB](https://www.igdb.com) (promedio de reseñas de medios), que el servidor pide con una app de Twitch:
+[IGDB](https://www.igdb.com) (promedio de reseñas de medios), que el servidor pide con una app de Twitch.
+IGDB también da la duración de los juegos cuando HowLongToBeat no responde:
 
 1. Entrá a <https://dev.twitch.tv/console> con tu cuenta de Twitch (hace falta tener activada la verificación
    en dos pasos) y tocá **Register Your Application**.
@@ -175,7 +193,8 @@ Para juegos que no están en Steam se puede sumar, opcionalmente, la nota de cr�
    IGDB_CLIENT_SECRET=...
    ```
 
-El secret queda solo en el servidor; la app le pregunta la nota a `/api/critics` (solo con sesión iniciada).
+El secret queda solo en el servidor; la app le pregunta la nota a `/api/critics` y la duración a `/api/length`
+(solo con sesión iniciada).
 
 Las keys de RAWG y TMDB (`VITE_RAWG_KEY`, `VITE_TMDB_KEY`) se meten en el build (el `.env` lo lee `docker-compose.yml`), así que si la cambiás hay que
 volver a correr `docker compose up -d --build`.

@@ -2,8 +2,9 @@ import { useSync } from '../store/useSync';
 
 // Scores our own server looks up, since browsers can't get them directly: for
 // games, the Metacritic Steam shows for the PC version (or, if configured,
-// IGDB's critics) and Steam users' reviews rated like SteamDB does; for movies
-// and series, the IMDb rating from IMDb's daily public file.
+// IGDB's critics), Steam users' reviews rated like SteamDB does and how long
+// the game takes (HowLongToBeat); for movies and series, the IMDb rating from
+// IMDb's daily public file and Rotten Tomatoes' critics and audience.
 
 export interface CriticScore {
   score: number;
@@ -78,4 +79,58 @@ export async function imdbRating(id: string): Promise<ImdbRating | null> {
   } catch {
     return null;
   }
+}
+
+async function askServer<T>(path: string, params: Record<string, string>): Promise<T | undefined> {
+  const token = useSync.getState().token;
+  if (!token) return undefined;
+  try {
+    const res = await fetch(`${path}?${new URLSearchParams(params)}`, { headers: { Authorization: `Bearer ${token}` } });
+    // An older server or a source that's down: the data is just left out.
+    return res.ok ? ((await res.json()) as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** How long a game takes: HowLongToBeat (all play styles together), or IGDB's estimate. */
+export interface GameLength {
+  hours: number;
+  /** Main story, story + extras, and 100%. */
+  main: number | null;
+  plus: number | null;
+  full: number | null;
+  source: 'hltb' | 'igdb';
+  url: string | null;
+}
+
+const lengthCache = new Map<string, GameLength | null>();
+
+/** `undefined` when it couldn't be asked (signed out, offline), `null` when nobody knows. */
+export async function gameLength(name: string, released: string | null): Promise<GameLength | null | undefined> {
+  const year = released?.slice(0, 4) ?? '';
+  const key = `${name}|${year}`;
+  if (lengthCache.has(key)) return lengthCache.get(key);
+  const json = await askServer<{ length: GameLength | null }>('/api/length', { name, year });
+  if (!json) return undefined;
+  lengthCache.set(key, json.length);
+  return json.length;
+}
+
+/** Rotten Tomatoes: critics (Tomatometer) and audience (Popcornmeter), 0–100. */
+export interface Tomatoes {
+  critics: number | null;
+  criticReviews: number | null;
+  audience: number | null;
+  url: string;
+}
+
+const tomatoCache = new Map<string, Tomatoes | null>();
+
+export async function tomatoScores(imdbId: string): Promise<Tomatoes | null> {
+  if (tomatoCache.has(imdbId)) return tomatoCache.get(imdbId)!;
+  const json = await askServer<{ scores: Tomatoes | null }>('/api/rt', { imdb: imdbId });
+  if (!json) return null;
+  tomatoCache.set(imdbId, json.scores);
+  return json.scores;
 }
