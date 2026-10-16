@@ -113,6 +113,36 @@ Quien lo abre se crea una cuenta, aunque el registro esté cerrado, o entra con 
 - **Servidor:** las notificaciones usan Web Push con claves propias (`vapid.json` en el volumen de datos, se crean
   solas). No hace falta ninguna cuenta externa.
 
+### Nuvio → "Para puntuar" (con Trakt)
+
+Cuando terminás una película o una serie entera en Nuvio, la app te avisa para que la puntúes. Al tocar el aviso
+se abre la ficha con el puntaje listo. Funciona así: Nuvio anota en Trakt lo que mirás, y el servidor lee tu
+historial de Trakt cada 10 minutos.
+
+1. **App de Trakt (una vez, en el servidor):**
+   - Entrá a <https://trakt.tv/oauth/applications> → **New application**.
+   - Nombre: `GamesTracker`. Redirect URI: `urn:ietf:wg:oauth:2.0:oob`.
+   - Copiá el **Client ID** y el **Client Secret** al `.env` del servidor y reiniciá con `docker compose up -d --build`:
+
+   ```bash
+   TRAKT_CLIENT_ID=...
+   TRAKT_CLIENT_SECRET=...
+   ```
+
+2. **En Nuvio:** Ajustes → Trakt → iniciá sesión con tu cuenta de Trakt.
+3. **En la app:** Ajustes → **Nuvio (con Trakt)** → **Conectar con Trakt**. Entrá a trakt.tv/activate, poné el código
+   y autorizá con la misma cuenta.
+4. **Notificaciones:** para que lleguen al teléfono, prendé Ajustes → Amigos → **Notificaciones en este dispositivo**.
+
+Qué cuenta como terminado y qué se avisa:
+
+- **Película:** cuenta cuando la terminás. **Serie:** cuando viste todos los episodios emitidos.
+- **Sin repetir:** se avisa una sola vez por título y nunca de algo que ya puntuaste. Lo pendiente también aparece en
+  el inicio, en **Para puntuar**.
+- **Historial viejo:** solo cuenta lo que mires desde que lo conectás.
+- **Privacidad:** cada cuenta conecta su propio Trakt. Las claves de acceso quedan en el servidor (`trakt/` en el
+  volumen de datos).
+
 ### Puntaje de IMDb (series y pelis)
 
 IMDb no tiene una API gratis, pero publica todos los días un archivo con el puntaje y los votos de cada título

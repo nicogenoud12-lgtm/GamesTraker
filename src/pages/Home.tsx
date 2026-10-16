@@ -21,6 +21,7 @@ import type { Game, Rating } from '../lib/types';
 import type { Tier } from '../lib/tiers';
 import { TIER_BY_ID } from '../lib/tiers';
 import TierIcon from '../components/TierIcon';
+import ToRateCard from '../components/ToRateCard';
 
 export default function Home() {
   const games = useStore((s) => s.games);
@@ -187,7 +188,8 @@ export default function Home() {
         </section>
       )}
 
-      <div className="mt-4 px-5">
+      <div className="mt-4 space-y-4 px-5">
+        <ToRateCard />
         <YearLink />
       </div>
 
@@ -434,6 +436,7 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
             </div>
           )}
 
+          <ToRateCard />
           <YearLink />
 
           <Link
