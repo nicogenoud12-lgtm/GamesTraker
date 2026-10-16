@@ -24,6 +24,12 @@ export function hasEnvKey(which: keyof Keys): boolean {
   return ENV[which].length > 0;
 }
 
+/** The keys in use right now, outside of React. */
+export function currentKeys(): Keys {
+  const { apiKey, tmdbKey } = useStore.getState();
+  return { rawg: apiKey.trim() || ENV.rawg, tmdb: tmdbKey.trim() || ENV.tmdb };
+}
+
 /** Keys typed in Ajustes (or synced from the account) win over the server's build-time ones. */
 export function useKeys(): Keys {
   const rawg = useStore((s) => s.apiKey);

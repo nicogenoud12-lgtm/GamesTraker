@@ -143,6 +143,9 @@ Qué cuenta como terminado y qué se avisa:
 - **Sin repetir:** se avisa una sola vez por título y nunca de algo que ya puntuaste. Lo pendiente también aparece en
   el inicio, en **Para puntuar**.
 - **Historial viejo:** solo cuenta lo que mires desde que lo conectás.
+- **Viendo ahora:** lo que Trakt tiene en "Continuar viendo" (películas pausadas y series vistas en el último mes
+  que no terminaste) se agrega solo arriba de **Viendo ahora**, una vez por título: si lo sacás de la lista, no
+  vuelve.
 - **Privacidad:** cada cuenta conecta su propio Trakt. Las claves de acceso quedan en el servidor (`trakt/` en el
   volumen de datos).
 
