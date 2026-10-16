@@ -778,11 +778,14 @@ async function unsubscribePush(user, endpoint) {
 // leaves it "to rate" and sends a notification to that person's devices.
 
 const TRAKT_ID = process.env.TRAKT_CLIENT_ID ?? '';
+// Apps created on Trakt since October 2026 get no secret (they're "PKCE" apps); the
+// device code alone proves the sign-in, so the secret is only sent when there is one.
 const TRAKT_SECRET = process.env.TRAKT_CLIENT_SECRET ?? '';
+const traktSecret = TRAKT_SECRET ? { client_secret: TRAKT_SECRET } : {};
 const TRAKT_API = process.env.TRAKT_API_URL ?? 'https://api.trakt.tv';
 const TRAKT_POLL_MS = Math.max(2, Number(process.env.TRAKT_POLL_MINUTES) || 10) * 60_000;
 const TRAKT_DIR = path.join(DATA_DIR, 'trakt');
-const traktEnabled = () => Boolean(TRAKT_ID && TRAKT_SECRET);
+const traktEnabled = () => Boolean(TRAKT_ID);
 const traktFile = (uid) => path.join(TRAKT_DIR, `${uid}.json`);
 /** Device codes waiting for the person to approve them on trakt.tv/activate. */
 const traktDevices = new Map();
@@ -819,7 +822,7 @@ async function traktPoll(user) {
   const dev = traktDevices.get(user.id);
   if (!dev || Date.now() > dev.until) return { status: 'expired' };
   const res = await traktFetch('POST', '/oauth/device/token', {
-    body: { code: dev.code, client_id: TRAKT_ID, client_secret: TRAKT_SECRET },
+    body: { code: dev.code, client_id: TRAKT_ID, ...traktSecret },
   }).catch(() => null);
   if (!res || res.status === 400 || res.status === 429) return { status: 'pending' };
   if (res.status !== 200) {
@@ -852,7 +855,7 @@ async function freshTrakt(uid, t) {
     body: {
       refresh_token: t.refresh,
       client_id: TRAKT_ID,
-      client_secret: TRAKT_SECRET,
+      ...traktSecret,
       redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
       grant_type: 'refresh_token',
     },
@@ -862,6 +865,7 @@ async function freshTrakt(uid, t) {
     if (res.status === 400 || res.status === 401) await saveTrakt(uid, { ...t, broken: true });
     return null;
   }
+  // Refresh tokens are single-use: the new one replaces the old right away.
   const n = await res.json();
   const next = { ...t, access: n.access_token, refresh: n.refresh_token, expiresAt: (Number(n.created_at) + Number(n.expires_in)) * 1000 };
   await saveTrakt(uid, next);
