@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import GradualBlur from './reactbits/GradualBlur';
 
 interface Props {
   className?: string;
   /** Classes for the outer box, e.g. `min-w-0 flex-1` when the row sits inside a flex container. */
   wrapperClassName?: string;
+  /** Blur over the side padding, where the next item peeks in; each side fades out once there's nothing more that way. */
+  edgeBlur?: boolean;
   children: ReactNode;
 }
 
@@ -12,7 +15,7 @@ interface Props {
  * Horizontal scroller that also works with a mouse: the wheel scrolls it
  * sideways, it can be dragged, and on hover devices it shows arrow buttons.
  */
-export default function ScrollRow({ className = '', wrapperClassName = '', children }: Props) {
+export default function ScrollRow({ className = '', wrapperClassName = '', edgeBlur = false, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
 
@@ -23,25 +26,22 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
     const update = () =>
       setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
 
-    // While the wheel keeps turning after it moved the row, the row holds on to it,
-    // so reaching the end stops there instead of spilling the rest into the page.
-    const LATCH_MS = 300;
-    let latchedUntil = 0;
+    // Once the wheel has moved the row, the row keeps the wheel until the pointer leaves it:
+    // reaching an end stops there instead of scrolling the page, however fast or often it turns.
+    let latched = false;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      const now = performance.now();
       const canLeft = el.scrollLeft > 0;
       const canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
       if ((e.deltaY > 0 && canRight) || (e.deltaY < 0 && canLeft)) {
         e.preventDefault();
         el.scrollLeft += e.deltaY;
-        latchedUntil = now + LATCH_MS;
-      } else if (now < latchedUntil) {
-        // Same gesture, row at its end: swallow it. A fresh turn after a pause scrolls the page.
+        latched = true;
+      } else if (latched) {
         e.preventDefault();
-        latchedUntil = now + LATCH_MS;
       }
     };
+    const onLeave = () => (latched = false);
 
     let drag: { x: number; left: number; moved: boolean } | null = null;
     let suppressClick = false;
@@ -77,6 +77,7 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
     ro.observe(el);
     el.addEventListener('scroll', update, { passive: true });
     el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('pointerleave', onLeave);
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('dragstart', onDragStart);
     window.addEventListener('click', onClick, true);
@@ -86,6 +87,7 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
       ro.disconnect();
       el.removeEventListener('scroll', update);
       el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerleave', onLeave);
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('dragstart', onDragStart);
       window.removeEventListener('click', onClick, true);
@@ -104,6 +106,20 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
       <div ref={ref} className={`no-scrollbar overflow-x-auto overscroll-x-contain ${className}`}>
         {children}
       </div>
+      {edgeBlur &&
+        (['left', 'right'] as const).map((side) => (
+          <GradualBlur
+            key={side}
+            position={side}
+            height="1.75rem"
+            strength={2}
+            layers={6}
+            tint="rgba(11, 11, 16, 0.6)"
+            autoHide
+            container={ref}
+            zIndex={5}
+          />
+        ))}
       {edges.left && (
         <ArrowButton side="left" onClick={() => scrollBy(-1)}>
           <ChevronLeft size={18} />

@@ -79,7 +79,7 @@ export function iconFor(list: Pick<GameList, 'id' | 'emoji'>): IconDef {
   return SYSTEM[list.id] ?? LIST_ICONS[list.emoji] ?? LIST_ICONS[FROM_EMOJI[list.emoji] ?? 'bookmark'];
 }
 
-const SIZES = { sm: { box: 36, icon: 18, radius: 11 }, md: { box: 48, icon: 24, radius: 14 }, lg: { box: 56, icon: 28, radius: 17 } };
+const SIZES = { xs: { box: 24, icon: 13, radius: 8 }, sm: { box: 36, icon: 18, radius: 11 }, md: { box: 48, icon: 24, radius: 14 }, lg: { box: 56, icon: 28, radius: 17 } };
 
 /** Gradient badge with the list's icon; "Jugando ahora" gets a live dot. */
 export default function ListIcon({ list, size = 'md' }: { list: Pick<GameList, 'id' | 'emoji'>; size?: keyof typeof SIZES }) {
@@ -99,7 +99,7 @@ export default function ListIcon({ list, size = 'md' }: { list: Pick<GameList, '
       aria-hidden="true"
     >
       <Icon size={s.icon} strokeWidth={2.2} />
-      {(list.id === PLAYING_LIST_ID || list.id === WATCHING_LIST_ID) && (
+      {size !== 'xs' && (list.id === PLAYING_LIST_ID || list.id === WATCHING_LIST_ID) && (
         <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
           <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-bg bg-emerald-300" />
