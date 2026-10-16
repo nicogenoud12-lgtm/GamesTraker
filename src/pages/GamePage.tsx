@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Repeat2, Share2, Star, Youtube } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
+import BorderGlow from '../components/reactbits/BorderGlow';
 import RatingSheet from '../components/RatingSheet';
 import ScrollRow from '../components/ScrollRow';
 import ListPickerSheet from '../components/ListPickerSheet';
@@ -202,13 +203,15 @@ export default function GamePage() {
   const took = rating?.startedAt && rating.finishedAt ? daysBetween(rating.startedAt, rating.finishedAt) : null;
   const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
   const coverSize = isDesktop ? { w: 300, h: 400 } : { w: 200, h: 266 };
+  const coverRadius = isDesktop ? 22 : 18;
+  const screenMode = modeOf(game.id) === 'screen';
 
   const cover = (
     // The name lets the tapped cover morph into this one (see CoverTransition).
     <div
       className="transition-[box-shadow] duration-700"
       style={{
-        borderRadius: isDesktop ? 22 : 18,
+        borderRadius: coverRadius,
         viewTransitionName: COVER_TRANSITION,
         boxShadow: tint ? `0 24px 70px -18px color-mix(in srgb, ${tint} 70%, transparent)` : undefined,
       }}
@@ -222,8 +225,27 @@ export default function GamePage() {
         imageHeight={coverSize.h}
         rotateAmplitude={12}
         scaleOnHover={1.04}
-        radius={isDesktop ? 22 : 18}
+        radius={coverRadius}
         showTooltip={false}
+        // Inside the tilting layer, so the edge light tilts with the cover. Sweeps once on arrival, then follows the pointer near the edges.
+        displayOverlayContent
+        overlayDepth={0}
+        overlayContent={
+          <BorderGlow
+            key={game.id}
+            className="cover-glow h-full border-transparent! bg-transparent! shadow-none!"
+            backgroundColor="transparent"
+            borderRadius={coverRadius}
+            edgeSensitivity={30}
+            glowRadius={32}
+            glowIntensity={0.9}
+            fillOpacity={0.2}
+            coneSpread={25}
+            glowColor={screenMode ? '40 90 75' : '270 90 82'}
+            colors={screenMode ? ['#fbbf24', '#fb7185', '#f97316'] : ['#c084fc', '#f472b6', '#38bdf8']}
+            animated
+          />
+        }
       >
         {generatedCover && (
           <div className="absolute inset-0 flex items-end p-4 text-left">
