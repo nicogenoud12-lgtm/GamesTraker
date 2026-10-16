@@ -42,6 +42,9 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
   mismo número. En carátulas y filas va **un solo número** (crítica, si no jugadores); en la ficha, **todos**, en este
   orden: Metacritic crítica, Metacritic usuarios (de su página, `title="Metascore N out of 100"` / `"User score N out of
   10"`), IGDB crítica, IGDB usuarios, Steam, RAWG jugadores.
+- **Caché de notas:** en el navegador (`gamestraker-scores`, no se sincroniza), por id de título. La ficha muestra lo
+  guardado al instante y revalida; cada sitio que responde reemplaza lo suyo, el que falla deja lo guardado. Precarga en
+  segundo plano de los juegos puntuados o en listas (40 por visita, 1 cada 1,5 s, vencen a los 14 días).
 - **Trakt → Viendo ahora:** una vez por título; si Nico lo saca de la lista, no vuelve. Fecha de inicio = el día
   que se agrega.
 

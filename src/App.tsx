@@ -24,6 +24,7 @@ import { startNotices } from './lib/social';
 import { refreshSavedCovers, refreshSavedTitles } from './lib/savedTitles';
 import { useSync } from './store/useSync';
 import { loadGameIndex } from './lib/gameIndex';
+import { startScoreWarmup } from './lib/warmScores';
 import { useStore } from './store/useStore';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
@@ -39,6 +40,8 @@ export default function App() {
   // Covers come from our server: once signed in.
   const token = useSync((s) => s.token);
   useEffect(() => void refreshSavedCovers(), [token]);
+  // Scores of the saved games, fetched ahead so their pages show them at once.
+  useEffect(() => (token ? startScoreWarmup() : undefined), [token]);
   // The popular games index, ready before the first search (the browser keeps it between visits).
   useEffect(() => {
     if (!token) return;

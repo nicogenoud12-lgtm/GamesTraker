@@ -31,6 +31,7 @@ import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
 import { COVER_TRANSITION } from '../components/CoverTransition';
+import { cachedScores, hasScores, mergeScores, saveScores } from '../lib/scoreCache';
 import { useCoverTint } from '../lib/tint';
 import { useIsDesktop } from '../lib/useMedia';
 import { resizeImage } from '../lib/rawg';
@@ -117,25 +118,44 @@ export default function GamePage() {
     };
   }, [gameId, key]);
 
-  // Every critics' and players' score our server finds: Metacritic, IGDB and Steam.
-  const [scores, setScores] = useState<Scores | null>(null);
+  // Every critics' and players' score our server finds: Metacritic, IGDB and Steam. What this
+  // browser saw last time shows at once; a fresh answer replaces it, a failed one leaves it.
+  const [scores, setScores] = useState<Scores | null>(() => cachedScores(gameId)?.scores ?? null);
+  const [length, setLength] = useState<GameLength | null>(() => cachedScores(gameId)?.length ?? null);
+  const [imdb, setImdb] = useState<ImdbRating | null>(() => cachedScores(gameId)?.imdb ?? null);
+  const [tomatoes, setTomatoes] = useState<Tomatoes | null>(() => cachedScores(gameId)?.tomatoes ?? null);
+  useEffect(() => {
+    const saved = cachedScores(gameId);
+    setScores(saved?.scores ?? null);
+    setLength(saved?.length ?? null);
+    setImdb(saved?.imdb ?? null);
+    setTomatoes(saved?.tomatoes ?? null);
+  }, [gameId]);
+
   const isGame = mode === 'games' && detail != null;
   useEffect(() => {
-    setScores(null);
     if (!isGame || !detail) return;
     let alive = true;
-    gameScores(detail.name, detail.released, detail.steamAppId, detail.metacriticSlug).then((s) => alive && setScores(s));
+    gameScores(detail.name, detail.released, detail.steamAppId, detail.metacriticSlug).then((s) => {
+      if (!hasScores(s)) return;
+      const merged = mergeScores(cachedScores(detail.id)?.scores, s);
+      saveScores(detail.id, { scores: merged });
+      if (alive) setScores(merged);
+    });
     return () => {
       alive = false;
     };
   }, [isGame, detail?.id]);
   // How long it takes, from HowLongToBeat (or IGDB); RAWG's average otherwise.
-  const [length, setLength] = useState<GameLength | null>(null);
   useEffect(() => {
-    setLength(null);
     if (!isGame || !detail) return;
     let alive = true;
-    gameLength(detail.name, detail.released).then((l) => alive && setLength(l ?? null));
+    gameLength(detail.name, detail.released).then((l) => {
+      // `undefined`: it couldn't be asked; keep what was saved.
+      if (l === undefined) return;
+      saveScores(detail.id, { length: l });
+      if (alive) setLength(l);
+    });
     return () => {
       alive = false;
     };
@@ -146,24 +166,28 @@ export default function GamePage() {
   const mcCritic = mc?.critic ?? (isGame && detail?.metacritic != null && !detail.scoreLabel ? detail.metacritic : null);
   const igdb = scores?.igdb;
 
-  const [imdb, setImdb] = useState<ImdbRating | null>(null);
   const imdbId = detail?.imdbId;
   useEffect(() => {
-    setImdb(null);
     if (!imdbId) return;
     let alive = true;
-    imdbRating(imdbId).then((r) => alive && setImdb(r));
+    imdbRating(imdbId).then((r) => {
+      if (!r) return;
+      saveScores(gameId, { imdb: r });
+      if (alive) setImdb(r);
+    });
     return () => {
       alive = false;
     };
   }, [imdbId]);
 
-  const [tomatoes, setTomatoes] = useState<Tomatoes | null>(null);
   useEffect(() => {
-    setTomatoes(null);
     if (!imdbId) return;
     let alive = true;
-    tomatoScores(imdbId).then((t) => alive && setTomatoes(t));
+    tomatoScores(imdbId).then((t) => {
+      if (!t) return;
+      saveScores(gameId, { tomatoes: t });
+      if (alive) setTomatoes(t);
+    });
     return () => {
       alive = false;
     };
