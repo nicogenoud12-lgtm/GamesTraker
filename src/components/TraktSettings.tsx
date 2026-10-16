@@ -66,8 +66,8 @@ export default function TraktSettings() {
         <h2 className="font-display text-lg font-bold">Nuvio (con Trakt)</h2>
       </div>
       <p className="mt-2 text-sm text-muted">
-        Cuando terminás una película o una serie entera en Nuvio, te llega un aviso para puntuarla. Nuvio lo anota en
-        Trakt y la app lo lee de ahí.
+        Lo que empezaste en Nuvio pasa solo a Viendo ahora, y cuando terminás una película o una serie entera te llega un
+        aviso para puntuarla. Nuvio lo anota en Trakt y la app lo lee de ahí.
       </p>
 
       {!status ? (

@@ -1147,6 +1147,62 @@ async function freshTrakt(uid, t) {
   return next;
 }
 
+const WATCHING_DAYS = 30;
+
+/**
+ * What's half-watched, like Trakt's "Continuar viendo": paused movies, and series
+ * watched in the last month that still have episodes left. Null if Trakt didn't answer.
+ */
+async function traktWatching(t) {
+  const get = (p) =>
+    traktFetch('GET', p, { token: t.access })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  const [movies, episodes, shows] = await Promise.all([
+    get('/sync/playback/movies?limit=30'),
+    get('/sync/playback/episodes?limit=30'),
+    get('/sync/watched/shows?extended=noseasons'),
+  ]);
+  if (!movies && !episodes && !shows) return null;
+  const watching = new Map();
+  const add = (kind, item, at) =>
+    watching.set(`${kind}:${item.ids.tmdb}`, {
+      key: `${kind}:${item.ids.tmdb}`,
+      id: `tmdb:${kind}:${item.ids.tmdb}`,
+      kind,
+      title: str(item.title) ?? '?',
+      year: item.year ?? null,
+      at,
+    });
+  for (const p of movies ?? []) if (p.movie?.ids?.tmdb && !(p.progress >= 95)) add('movie', p.movie, Date.parse(p.paused_at) || Date.now());
+
+  const recent = new Map();
+  const consider = (show, at) => {
+    if (!show?.ids?.trakt || !show.ids.tmdb || !at) return;
+    const prev = recent.get(show.ids.trakt);
+    recent.set(show.ids.trakt, { show, at: Math.max(at, prev?.at ?? 0) });
+  };
+  for (const p of episodes ?? []) consider(p.show, Date.parse(p.paused_at));
+  for (const w of shows ?? []) {
+    const at = Date.parse(w.last_watched_at);
+    if (Date.now() - at < WATCHING_DAYS * 864e5) consider(w.show, at);
+  }
+  // A series' progress is only asked again when something new was watched in it.
+  const known = t.showProgress ?? {};
+  const showProgress = {};
+  for (const [traktId, { show, at }] of [...recent].sort((a, b) => b[1].at - a[1].at).slice(0, 15)) {
+    let done = known[traktId]?.at === at ? known[traktId].done : null;
+    if (done == null) {
+      const p = await get(`/shows/${traktId}/progress/watched?specials=false`);
+      if (!p) continue;
+      done = p.aired > 0 && p.completed >= p.aired;
+    }
+    showProgress[traktId] = { at, done };
+    if (!done) add('tv', show, at);
+  }
+  return { watching: [...watching.values()].sort((a, b) => b.at - a.at), showProgress };
+}
+
 /** Reads the new Trakt history of one account and queues what was finished. */
 async function traktCheck(uid) {
   if (!traktEnabled()) return;
@@ -1154,6 +1210,12 @@ async function traktCheck(uid) {
   if (!t) return;
   t = await freshTrakt(uid, t);
   if (!t) return;
+  // Kept up to date even when the history below has nothing new.
+  const now = await traktWatching(t);
+  if (now) {
+    t = { ...t, ...now };
+    await saveTrakt(uid, t);
+  }
   const res = await traktFetch('GET', `/sync/history?${new URLSearchParams({ start_at: t.since, limit: '100' })}`, { token: t.access }).catch(() => null);
   if (!res) return;
   if (res.status === 401) return saveTrakt(uid, { ...t, broken: true });
@@ -1210,7 +1272,7 @@ async function traktCheck(uid) {
 
 async function traktStatus(user) {
   const t = await readJson(traktFile(user.id), null);
-  if (!t) return { enabled: traktEnabled(), connected: false, pending: [] };
+  if (!t) return { enabled: traktEnabled(), connected: false, pending: [], watching: [] };
   const ratings = (await readData(user.id)).ratings ?? {};
   return {
     enabled: traktEnabled(),
@@ -1219,7 +1281,20 @@ async function traktStatus(user) {
     account: t.account ?? null,
     // Whatever got rated meanwhile (on any device) stops being pending.
     pending: (t.pending ?? []).filter((p) => !ratings[p.id]),
+    // Half-watched titles the app hasn't put in "Viendo ahora" yet.
+    watching: (t.watching ?? []).filter((w) => !(t.watchingAdded ?? []).includes(w.key) && !ratings[w.id]),
   };
+}
+
+/** The app put these in "Viendo ahora": they aren't offered again, even if taken out. */
+async function traktWatchingAdded(user, keys) {
+  if (!Array.isArray(keys)) throw new HttpError(400, 'Formato inválido');
+  const t = await readJson(traktFile(user.id), null);
+  if (!t) return { ok: true };
+  const added = new Set(t.watchingAdded ?? []);
+  for (const k of keys.slice(0, 100)) if (typeof k === 'string' && /^(movie|tv):\d+$/.test(k)) added.add(k);
+  await saveTrakt(user.id, { ...t, watchingAdded: [...added].slice(-1000) });
+  return { ok: true };
 }
 
 async function traktDismiss(user, key) {
@@ -1422,6 +1497,8 @@ async function handle(req, res) {
     }
     case 'POST /api/trakt/dismiss':
       return send(res, 200, await traktDismiss(await authenticate(req), (await readBody(req)).key));
+    case 'POST /api/trakt/watching':
+      return send(res, 200, await traktWatchingAdded(await authenticate(req), (await readBody(req)).keys));
     case 'POST /api/trakt/disconnect':
       return send(res, 200, await traktDisconnect(await authenticate(req)));
     case 'GET /api/critics': {

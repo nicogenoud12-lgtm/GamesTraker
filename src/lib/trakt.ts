@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import { api } from './sync';
+import { currentKeys } from './catalog';
+import { tmdbItem } from './tmdb';
+import type { Game } from './types';
 import { useSync } from '../store/useSync';
+import { WATCHING_LIST_ID, useStore } from '../store/useStore';
+import { useToast } from '../store/useToast';
 
-// Trakt (fed by Nuvio): what was finished and is waiting to be rated.
+// Trakt (fed by Nuvio): what was finished and is waiting to be rated, and what's
+// half-watched, which goes into "Viendo ahora" on its own.
 
 export interface ToRate {
   key: string;
@@ -22,6 +28,8 @@ export interface TraktStatus {
   broken?: boolean;
   account?: string | null;
   pending: ToRate[];
+  /** Half-watched on Trakt and not yet put in "Viendo ahora" (older servers don't send it). */
+  watching?: ToRate[];
 }
 
 export const useTrakt = create<{ status: TraktStatus | null }>()(() => ({ status: null }));
@@ -34,6 +42,7 @@ export async function refreshTrakt(): Promise<TraktStatus | null> {
   try {
     const status = await api<TraktStatus>('GET', '/trakt');
     useTrakt.setState({ status });
+    void addWatching(status.watching);
     return status;
   } catch {
     return useTrakt.getState().status;
@@ -45,7 +54,41 @@ export const startTrakt = () =>
 export const pollTrakt = () => api<{ status: 'pending' | 'connected' | 'expired' | 'denied' }>('POST', '/trakt/poll');
 
 export async function checkTraktNow(): Promise<void> {
-  useTrakt.setState({ status: await api<TraktStatus>('POST', '/trakt/check') });
+  const status = await api<TraktStatus>('POST', '/trakt/check');
+  useTrakt.setState({ status });
+  await addWatching(status.watching);
+}
+
+let adding = false;
+
+/** Puts what's half-watched on Trakt at the top of "Viendo ahora", once per title. */
+async function addWatching(items: ToRate[] | undefined): Promise<void> {
+  if (adding || !items?.length) return;
+  adding = true;
+  try {
+    const key = currentKeys().tmdb;
+    const added: string[] = [];
+    // Oldest first, so the most recent ends up on top.
+    for (const w of [...items].reverse()) {
+      const inList = useStore.getState().lists.find((l) => l.id === WATCHING_LIST_ID)?.gameIds.includes(w.id);
+      if (!inList) {
+        const fallback: Game = { id: w.id, name: w.title, cover: null, released: w.year ? `${w.year}-01-01` : null, genres: [], platforms: [] };
+        const game = key ? await tmdbItem(key, w.kind, w.id.split(':')[2]).catch(() => fallback) : fallback;
+        useStore.getState().addToList(WATCHING_LIST_ID, game, 'top');
+        added.push(w.title);
+      }
+    }
+    await api('POST', '/trakt/watching', { keys: items.map((w) => w.key) });
+    const status = useTrakt.getState().status;
+    if (status) useTrakt.setState({ status: { ...status, watching: [] } });
+    if (added.length) {
+      useToast.getState().show(added.length === 1 ? `${added[0]} pasó a Viendo ahora (Trakt)` : `${added.length} títulos pasaron a Viendo ahora (Trakt)`);
+    }
+  } catch {
+    // Offered again on the next check.
+  } finally {
+    adding = false;
+  }
 }
 
 export async function dismissToRate(key: string): Promise<void> {
