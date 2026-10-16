@@ -45,15 +45,16 @@ export default function GameRow({ game, rank }: { game: Game; rank?: number }) {
           </p>
           {(game.genres.length > 0 || scores.critic != null || scores.users != null) && (
             <p className="truncate text-xs text-muted/70">
-              {scores.critic != null && (
+              {scores.critic != null ? (
                 <span className="mr-1.5 font-semibold text-emerald-300" title={`Crítica (${scores.criticFrom})`}>
-                  Crítica {scores.critic}
+                  {scores.criticFrom === 'Metacritic' ? 'MC' : 'Crítica'} {scores.critic}
                 </span>
-              )}
-              {scores.users != null && (
-                <span className="mr-1.5 font-semibold text-sky-300" title={`${kind ? 'Público' : 'Jugadores'} (${scores.usersFrom})`}>
-                  {kind ? '★' : 'Jugadores'} {scores.users}
-                </span>
+              ) : (
+                scores.users != null && (
+                  <span className="mr-1.5 font-semibold text-sky-300" title={`${kind ? 'Público' : 'Jugadores'} (${scores.usersFrom})`}>
+                    ★ {scores.users}
+                  </span>
+                )
               )}
               {game.genres.slice(0, 3).join(', ')}
             </p>

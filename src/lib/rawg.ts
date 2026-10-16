@@ -30,6 +30,7 @@ interface RawgDetail extends RawgGame {
   publishers?: { name: string }[];
   metacritic: number | null;
   metacritic_platforms?: { metascore: number }[];
+  metacritic_url?: string | null;
   playtime: number | null;
   website: string | null;
 }
@@ -159,6 +160,7 @@ export async function rawgDetail(key: string, rawgId: string): Promise<GameDetai
     website: g.website || null,
     screenshots: shots.results.map((s) => s.image),
     steamAppId: steam ?? null,
+    metacriticSlug: /metacritic\.com\/game\/(?:[^/]+\/)?([a-z0-9-]+)\/?$/.exec(g.metacritic_url ?? '')?.[1] ?? null,
   };
 }
 

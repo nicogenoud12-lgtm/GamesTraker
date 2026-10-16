@@ -318,15 +318,61 @@ function pickMatch(results, name, year, nameOf = (g) => g.name, releasedIn = (g)
 const CRITIC_TTL = 7 * 864e5;
 const critics = new Map();
 
-async function igdbScore(name, year) {
+/** IGDB's critics' (press reviews) and players' averages, 0–100. */
+async function igdbScores(name, year) {
   const q = String(name).replace(/["\\]/g, ' ').slice(0, 120);
   const results = await igdbQuery(
-    `search "${q}"; fields name,first_release_date,aggregated_rating,aggregated_rating_count,url; limit 20;`,
+    `search "${q}"; fields name,first_release_date,aggregated_rating,aggregated_rating_count,rating,rating_count,url; limit 20;`,
   );
   const g = pickMatch(results, name, year);
-  return g?.aggregated_rating
-    ? { score: Math.round(g.aggregated_rating), source: 'igdb', reviews: g.aggregated_rating_count ?? null, url: g.url ?? null }
-    : null;
+  if (!g) return null;
+  const critic = g.aggregated_rating ? Math.round(g.aggregated_rating) : null;
+  const users = g.rating && (g.rating_count ?? 0) >= 3 ? Math.round(g.rating) : null;
+  if (critic == null && users == null) return null;
+  return { critic, criticReviews: g.aggregated_rating_count ?? null, users, userReviews: g.rating_count ?? null, url: g.url ?? null };
+}
+
+// Metacritic has no API; its game page states both scores in its markup:
+// title="Metascore 96 out of 100" and title="User score 8.7 out of 10".
+const METACRITIC = process.env.METACRITIC_URL ?? 'https://www.metacritic.com';
+
+/** "Baldur's Gate 3" → "baldurs-gate-3", the way Metacritic names its pages. */
+const metacriticSlug = (name) =>
+  String(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/&/g, ' ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+async function metacriticScores(name, slugHint) {
+  const slug = slugHint || metacriticSlug(coverName(name));
+  if (!slug) return null;
+  const url = `${METACRITIC}/game/${slug}/`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', 'Accept-Language': 'en' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new HttpError(502, `Error de Metacritic (${res.status})`);
+  const html = await res.text();
+  const num = (re) => {
+    const m = re.exec(html);
+    return m ? Number(m[1].replace(/,/g, '')) : null;
+  };
+  const critic = num(/title="Metascore (\d{1,3}) out of 100"/);
+  const users = num(/title="User score (\d{1,2}(?:\.\d)?) out of 10"/);
+  if (critic == null && users == null) return null;
+  return {
+    critic,
+    criticReviews: num(/Based on ([\d,]+) Critic Reviews?/i),
+    // Metacritic shows players out of 10 (8.7); kept that way.
+    users,
+    userReviews: num(/Based on ([\d,]+) User Ratings?/i),
+    url,
+  };
 }
 
 // Steam's store shows the (PC) Metacritic score and its users' reviews, and needs
@@ -374,10 +420,10 @@ async function steamReviews(id) {
 
 const CRITIC_MISS_TTL = 864e5;
 
-async function criticScore(name, year, steamId) {
-  const key = `${simplify(name)}|${year ?? ''}|${steamId ?? ''}`;
+async function criticScore(name, year, steamId, mcSlug) {
+  const key = `${simplify(name)}|${year ?? ''}|${steamId ?? ''}|${mcSlug ?? ''}`;
   const hit = critics.get(key);
-  const found = (v) => v.score != null || v.steam != null;
+  const found = (v) => v.score != null || v.steam != null || v.metacritic != null || v.igdb != null;
   if (hit && Date.now() - hit.at < (found(hit.value) ? CRITIC_TTL : CRITIC_MISS_TTL)) return hit.value;
   let failed = false;
   const attempt = (fn) =>
@@ -386,12 +432,23 @@ async function criticScore(name, year, steamId) {
       failed = true;
       return null;
     });
-  const id = await attempt(() => steamAppId(name, steamId));
-  const [metacritic, steam] = id
+  // Every source at once; the game page shows all that answer.
+  const [id, mcPage, igdb] = await Promise.all([
+    attempt(() => steamAppId(name, steamId)),
+    attempt(() => metacriticScores(name, mcSlug)),
+    igdbEnabled() ? attempt(() => igdbScores(name, year)) : null,
+  ]);
+  const [steamMc, steam] = id
     ? await Promise.all([attempt(() => steamMetacritic(id)), attempt(() => steamReviews(id))])
     : [null, null];
-  const critic = metacritic ?? (igdbEnabled() ? await attempt(() => igdbScore(name, year)) : null);
-  const value = { ...(critic ?? { score: null }), steam };
+  // The single critic score older apps read: Metacritic's page, Steam's (PC) Metacritic, else IGDB's press.
+  const critic =
+    (mcPage?.critic != null ? { score: mcPage.critic, source: 'metacritic', reviews: mcPage.criticReviews, url: mcPage.url } : null) ??
+    steamMc ??
+    (igdb?.critic != null ? { score: igdb.critic, source: 'igdb', reviews: igdb.criticReviews, url: igdb.url } : null);
+  const metacritic =
+    mcPage ?? (steamMc ? { critic: steamMc.score, criticReviews: null, users: null, userReviews: null, url: steamMc.url } : null);
+  const value = { ...(critic ?? { score: null }), steam, metacritic, igdb };
   // A source that was down shouldn't hide the score for a whole day.
   if (found(value) || !failed) {
     if (critics.size > 5000) critics.clear();
@@ -1779,7 +1836,12 @@ async function handle(req, res) {
       if (!name) throw new HttpError(400, 'Falta el nombre del juego');
       const year = Number(url.searchParams.get('year')) || null;
       const steam = url.searchParams.get('steam');
-      return send(res, 200, await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null));
+      const mc = url.searchParams.get('mc');
+      return send(
+        res,
+        200,
+        await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null, mc && /^[a-z0-9-]{1,150}$/.test(mc) ? mc : null),
+      );
     }
     case 'GET /api/length': {
       // Signed-in only, like the critics: it spends the server's lookups.

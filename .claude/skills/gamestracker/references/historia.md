@@ -39,7 +39,9 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
   `popularity_primitives` tipo 1), cruzado a ids de RAWG por nombre y año. RAWG casi no tiene Metacritic de juegos
   nuevos. Períodos viejos siguen con RAWG.
 - **Puntajes:** `metacritic` = crítica; `userScore`/`userLabel` = jugadores (RAWG o IGDB). Nunca mezclar los dos en un
-  mismo número.
+  mismo número. En carátulas y filas va **un solo número** (crítica, si no jugadores); en la ficha, **todos**, en este
+  orden: Metacritic crítica, Metacritic usuarios (de su página, `title="Metascore N out of 100"` / `"User score N out of
+  10"`), IGDB crítica, IGDB usuarios, Steam, RAWG jugadores.
 - **Trakt → Viendo ahora:** una vez por título; si Nico lo saca de la lista, no vuelve. Fecha de inicio = el día
   que se agrega.
 

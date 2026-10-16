@@ -23,33 +23,57 @@ export interface SteamRating {
   url: string;
 }
 
+/** One site's critics' and users' scores. Metacritic's users are out of 10 (8.7); the rest out of 100. */
+export interface SiteScores {
+  critic: number | null;
+  criticReviews: number | null;
+  users: number | null;
+  userReviews: number | null;
+  url: string | null;
+}
+
 export interface Scores {
   critic: CriticScore | null;
   steam: SteamRating | null;
+  metacritic: SiteScores | null;
+  igdb: SiteScores | null;
 }
 
-const NONE: Scores = { critic: null, steam: null };
+const NONE: Scores = { critic: null, steam: null, metacritic: null, igdb: null };
 const cache = new Map<string, Scores>();
 
-export async function gameScores(name: string, released: string | null, steamAppId?: string | null): Promise<Scores> {
+export async function gameScores(
+  name: string,
+  released: string | null,
+  steamAppId?: string | null,
+  metacriticSlug?: string | null,
+): Promise<Scores> {
   const token = useSync.getState().token;
   if (!token) return NONE;
   const year = released?.slice(0, 4) ?? '';
   const steam = steamAppId ?? '';
-  const key = `${name}|${year}|${steam}`;
+  const mc = metacriticSlug ?? '';
+  const key = `${name}|${year}|${steam}|${mc}`;
   const hit = cache.get(key);
   if (hit) return hit;
   try {
-    const res = await fetch(`/api/critics?${new URLSearchParams({ name, year, steam })}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`/api/critics?${new URLSearchParams({ name, year, steam, mc })}`, { headers: { Authorization: `Bearer ${token}` } });
     // If the server is older or a source is down, the scores are just left out.
     if (!res.ok) return NONE;
-    const json = (await res.json()) as Partial<CriticScore> & { score: number | null; steam?: SteamRating | null };
+    const json = (await res.json()) as Partial<CriticScore> & {
+      score: number | null;
+      steam?: SteamRating | null;
+      metacritic?: SiteScores | null;
+      igdb?: SiteScores | null;
+    };
     const value: Scores = {
       critic:
         json.score != null
           ? { score: json.score, source: json.source ?? 'igdb', reviews: json.reviews ?? null, url: json.url ?? null }
           : null,
       steam: json.steam ?? null,
+      metacritic: json.metacritic ?? null,
+      igdb: json.igdb ?? null,
     };
     cache.set(key, value);
     return value;
