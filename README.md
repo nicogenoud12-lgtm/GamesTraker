@@ -149,6 +149,24 @@ Qué cuenta como terminado y qué se avisa:
 - **Privacidad:** cada cuenta conecta su propio Trakt. Las claves de acceso quedan en el servidor (`trakt/` en el
   volumen de datos).
 
+### Playnite (juegos de la PC)
+
+Una extensión chiquita de Playnite le avisa al servidor cuando arrancás o cerrás un juego y, al abrir Playnite, manda
+los juegos jugados con sus horas y su estado. No hace falta configurar nada en el servidor.
+
+1. **En la app (desde la PC con Playnite):** Ajustes → **Playnite (PC)** → **Bajar la extensión**. Se baja
+   `GamesTracker.pext` con la clave de tu cuenta y la dirección de la app adentro.
+2. **Abrilo:** Playnite pregunta si instala la extensión; aceptá y reinicialo.
+
+Qué hace:
+
+- **Jugando ahora:** lo que arrancás pasa solo, una vez por juego, con la fecha en que lo empezaste.
+- **Para puntuar:** cuando marcás un juego como **Superado** o **Completado** (también en castellano o con nombres
+  propios que los contengan), llega el aviso y la ficha abre con las horas, el estado y la fecha ya puestos.
+- **Horas:** cada ficha muestra cuántas horas le llevás en Playnite.
+- **Biblioteca vieja:** al conectarlo solo cuenta lo jugado en los últimos 30 días; lo de antes no genera avisos.
+- **Desconectar:** Ajustes → Playnite → Desconectar invalida la clave; la extensión deja de funcionar.
+
 ### Puntaje de IMDb (series y pelis)
 
 IMDb no tiene una API gratis, pero publica todos los días un archivo con el puntaje y los votos de cada título

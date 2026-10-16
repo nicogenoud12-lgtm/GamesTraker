@@ -19,6 +19,8 @@ interface Props {
   avgHours?: number | null;
   /** Where `avgHours` comes from ("HowLongToBeat", "IGDB", "RAWG"). */
   avgSource?: string;
+  /** What Playnite knows, filled in when there's no rating yet. */
+  suggested?: { hours?: number | null; status?: PlayStatus; finishedAt?: string | null };
 }
 
 const REPLAY: { id: Replay; label: string }[] = [
@@ -35,7 +37,7 @@ function parseHours(text: string): number | null {
 
 const today = () => localDay();
 
-export default function RatingSheet({ game, open, onClose, avgHours, avgSource = 'RAWG' }: Props) {
+export default function RatingSheet({ game, open, onClose, avgHours, avgSource = 'RAWG', suggested }: Props) {
   const existing = useStore((s) => s.ratings[game.id]);
   const startedOn = useStore((s) => s.starts[game.id]);
   const saveRating = useStore((s) => s.saveRating);
@@ -59,13 +61,15 @@ export default function RatingSheet({ game, open, onClose, avgHours, avgSource =
     setScore(s);
     setTier(existing?.tier ?? tierForScore(s).id);
     setTierManual(existing ? existing.tier !== tierForScore(existing.score).id : false);
-    setStatus(existing?.status ?? 'terminado');
+    setStatus(existing?.status ?? suggested?.status ?? 'terminado');
     setPlatform(existing?.platform ?? '');
     setStartedAt(existing?.startedAt ?? startedOn ?? '');
-    setFinishedAt(existing?.finishedAt ?? today());
-    setHours(existing?.hours != null ? String(existing.hours).replace('.', ',') : '');
+    setFinishedAt(existing?.finishedAt ?? suggested?.finishedAt ?? today());
+    const knownHours = existing ? existing.hours : suggested?.hours;
+    setHours(knownHours != null ? String(knownHours).replace('.', ',') : '');
     setReplay(existing?.replay ?? null);
     setNote(existing?.note ?? '');
+    // Not on `suggested`: Playnite's suggestion fills it when it opens, never over what's being typed.
   }, [open, existing, startedOn]);
 
   const changeScore = (value: number) => {

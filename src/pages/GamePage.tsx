@@ -32,10 +32,11 @@ import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
 import { COVER_TRANSITION } from '../components/CoverTransition';
 import { cachedScores, hasScores, mergeScores, saveScores } from '../lib/scoreCache';
+import { usePlaynite } from '../lib/playnite';
 import { useCoverTint } from '../lib/tint';
 import { useIsDesktop } from '../lib/useMedia';
 import { resizeImage } from '../lib/rawg';
-import { daysBetween, formatDate, formatHours, year } from '../lib/format';
+import { daysBetween, formatDate, formatHours, localDay, year } from '../lib/format';
 import type { Game, GameDetail } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
@@ -160,6 +161,9 @@ export default function GamePage() {
       alive = false;
     };
   }, [isGame, detail?.id]);
+  // Hours played in Playnite, and whether it was just marked finished there.
+  const playniteHours = usePlaynite((s) => s.status?.hours[gameId]) ?? null;
+  const playniteDone = usePlaynite((s) => s.status?.pending.find((p) => p.id === gameId));
   const steam = scores?.steam;
   // Metacritic's critics from its page, else RAWG's copy of it.
   const mc = scores?.metacritic;
@@ -518,11 +522,12 @@ export default function GamePage() {
     </section>
   );
 
-  const info = detail && (length || detail.playtime || detail.publishers.length > 0 || detail.website || (detail.facts?.length ?? 0) > 0) && (
+  const info = detail && (length || detail.playtime || playniteHours != null || detail.publishers.length > 0 || detail.website || (detail.facts?.length ?? 0) > 0) && (
     <dl className="mt-7 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
       {length ? <LengthInfo length={length} /> : detail.playtime ? <Info label="Duración promedio" value={`${detail.playtime} h`} /> : null}
       {detail.facts?.map((f) => <Info key={f.label} label={f.label} value={f.value} />)}
       {detail.publishers[0] && <Info label="Distribuye" value={detail.publishers[0]} />}
+      {playniteHours != null && <Info label="Jugado (Playnite)" value={`${String(playniteHours).replace('.', ',')} h`} />}
       {detail.released && <Info label="Lanzamiento" value={formatDate(detail.released)} />}
       {detail.website && (
         <a href={detail.website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-accent">
@@ -567,6 +572,15 @@ export default function GamePage() {
         onClose={() => setRateOpen(false)}
         avgHours={length?.hours ?? detail?.playtime}
         avgSource={length ? LENGTH_SOURCE[length.source] : 'RAWG'}
+        suggested={
+          playniteHours != null || playniteDone
+            ? {
+                hours: playniteDone?.hours ?? playniteHours,
+                status: playniteDone?.status,
+                finishedAt: playniteDone ? localDay(new Date(playniteDone.at)) : undefined,
+              }
+            : undefined
+        }
       />
       <ListPickerSheet game={game} open={listOpen} onClose={() => setListOpen(false)} />
       <AgainSheet game={game} open={againOpen} onClose={() => setAgainOpen(false)} />
