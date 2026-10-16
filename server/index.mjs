@@ -6,6 +6,7 @@
 //
 // CLI (inside the container):
 //   node index.mjs reset-password <usuario> <contraseña-nueva>
+//   node index.mjs rename-user <usuario> <nombre-nuevo>
 import http from 'node:http';
 import { createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
@@ -166,11 +167,35 @@ function recordFail(username) {
 
 const publicUser = (u) => ({ username: u.username, public: Boolean(u.public) });
 
-async function register(body) {
-  const username = normalize(body.username);
-  if (!USERNAME_RE.test(username)) {
+// Usernames keep the capitals they were written with ("Nico") but never matter when
+// looking someone up: "nico", "NICO" and "Nico" are the same account.
+const byName = (users, name) => users.find((u) => normalize(u.username) === normalize(name));
+
+function checkUsername(raw) {
+  const username = String(raw ?? '').trim();
+  if (!USERNAME_RE.test(normalize(username))) {
     throw new HttpError(400, 'El usuario tiene que tener de 3 a 32 letras, números, puntos o guiones');
   }
+  return username;
+}
+
+/** Changes the name of an account (sessions stay valid: they're tied to the account, not the name). */
+async function renameUser(id, raw) {
+  const username = checkUsername(raw);
+  return serial(async () => {
+    const db = await loadUsers();
+    const user = db.users.find((u) => u.id === id);
+    if (!user) throw new HttpError(404, 'No existe ese usuario');
+    const taken = byName(db.users, username);
+    if (taken && taken.id !== id) throw new HttpError(409, 'Ese usuario ya existe');
+    user.username = username;
+    await writeJson(USERS_FILE, db);
+    return publicUser(user);
+  });
+}
+
+async function register(body) {
+  const username = checkUsername(body.username);
   validatePassword(body.password);
   const { salt, hash } = await hashPassword(body.password);
   return serial(async () => {
@@ -179,7 +204,7 @@ async function register(body) {
     const inviter = body.invite ? db.users.find((u) => u.friendCode && u.friendCode === String(body.invite)) : null;
     if (body.invite && !inviter) throw new HttpError(400, 'La invitación no es válida o ya se cambió. Pedí un link nuevo.');
     if (db.users.length > 0 && !ALLOW_SIGNUP && !inviter) throw new HttpError(403, 'El registro está cerrado: ya hay una cuenta creada');
-    if (db.users.some((u) => u.username === username)) throw new HttpError(409, 'Ese usuario ya existe');
+    if (byName(db.users, username)) throw new HttpError(409, 'Ese usuario ya existe');
     const user = { id: randomBytes(8).toString('hex'), username, salt, hash, pwVersion: 1, createdAt: new Date().toISOString() };
     if (inviter) {
       user.friends = [inviter.id];
@@ -202,7 +227,7 @@ async function register(body) {
 async function login(body) {
   const username = normalize(body.username);
   assertNotLocked(username);
-  const user = (await loadUsers()).users.find((u) => u.username === username);
+  const user = byName((await loadUsers()).users, username);
   if (!user || typeof body.password !== 'string' || !(await checkPassword(user, body.password))) {
     recordFail(username);
     throw new HttpError(401, 'Usuario o contraseña incorrectos');
@@ -216,7 +241,7 @@ async function setPassword(username, password) {
   const { salt, hash } = await hashPassword(password);
   return serial(async () => {
     const db = await loadUsers();
-    const user = db.users.find((u) => u.username === normalize(username));
+    const user = byName(db.users, username);
     if (!user) throw new HttpError(404, 'No existe ese usuario');
     Object.assign(user, { salt, hash, pwVersion: user.pwVersion + 1 });
     await writeJson(USERS_FILE, db);
@@ -442,8 +467,7 @@ async function setPublic(user, value) {
 const str = (v, max = 300) => (typeof v === 'string' ? v.slice(0, max) : null);
 
 async function publicProfile(name, viewer = null) {
-  const username = normalize(name);
-  const user = (await loadUsers()).users.find((u) => u.username === username);
+  const user = byName((await loadUsers()).users, name);
   // Friends see each other's tier list unless they turned that off; anyone sees a public one.
   const allowed = user && (user.public || viewer?.id === user.id || canSee(viewer, user));
   if (!allowed) throw new HttpError(404, 'Este perfil no existe o no es público');
@@ -565,7 +589,7 @@ function addFriend(user, code) {
 function removeFriend(user, username) {
   return updateUsers((db) => {
     const me = db.users.find((u) => u.id === user.id);
-    const other = db.users.find((u) => u.username === normalize(username));
+    const other = byName(db.users, username);
     if (!other) return { ok: true };
     me.friends = (me.friends ?? []).filter((id) => id !== other.id);
     other.friends = (other.friends ?? []).filter((id) => id !== me.id);
@@ -580,7 +604,7 @@ function shareWith(user, username, share) {
   if (typeof share !== 'boolean') throw new HttpError(400, 'Formato inválido');
   return updateUsers((db) => {
     const me = db.users.find((u) => u.id === user.id);
-    const other = db.users.find((u) => u.username === normalize(username));
+    const other = byName(db.users, username);
     if (!areFriends(me, other)) throw new HttpError(404, 'No son amigos');
     const rest = (me.sharesWith ?? []).filter((id) => id !== other.id);
     me.sharesWith = share ? [...rest, other.id] : rest;
@@ -835,6 +859,10 @@ async function handle(req, res) {
       return send(res, 200, await login(await readBody(req)));
     case 'GET /api/auth/me':
       return send(res, 200, { user: publicUser(await authenticate(req)) });
+    case 'POST /api/auth/username': {
+      const user = await authenticate(req);
+      return send(res, 200, { user: await renameUser(user.id, (await readBody(req)).username) });
+    }
     case 'POST /api/auth/password': {
       const user = await authenticate(req);
       const body = await readBody(req);
@@ -925,6 +953,19 @@ await mkdir(ACTIVITY_DIR, { recursive: true });
 await mkdir(PUSH_DIR, { recursive: true });
 await loadSecret();
 await loadVapid();
+
+if (process.argv[2] === 'rename-user') {
+  const [, , , from, to] = process.argv;
+  try {
+    const user = byName((await loadUsers()).users, from);
+    if (!user) throw new Error(`No existe el usuario "${from}"`);
+    console.log(`Usuario renombrado a "${(await renameUser(user.id, to)).username}".`);
+    process.exit(0);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+}
 
 if (process.argv[2] === 'reset-password') {
   const [, , , username, password] = process.argv;
