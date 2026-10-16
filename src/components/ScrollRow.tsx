@@ -36,13 +36,17 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
 
     let drag: { x: number; left: number; moved: boolean } | null = null;
     let suppressClick = false;
-    // Swallow the click that ends a drag so links and chips don't fire.
+    // Swallow the click that ends a drag so links and chips don't fire. It listens on the window,
+    // ahead of the document-level cover transition, which would otherwise open the game anyway.
     const onClick = (e: MouseEvent) => {
       if (!suppressClick) return;
+      suppressClick = false;
+      if (!(e.target instanceof Node) || !el.contains(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
     };
     const onDown = (e: PointerEvent) => {
+      suppressClick = false;
       if (e.pointerType !== 'mouse' || e.button !== 0) return;
       drag = { x: e.clientX, left: el.scrollLeft, moved: false };
     };
@@ -53,10 +57,8 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
       if (drag.moved) el.scrollLeft = drag.left - dx;
     };
     const onUp = () => {
-      if (drag?.moved) {
-        suppressClick = true;
-        setTimeout(() => (suppressClick = false), 0);
-      }
+      // Cleared by the click it swallows, or by the next press if no click follows.
+      if (drag?.moved) suppressClick = true;
       drag = null;
     };
     const onDragStart = (e: DragEvent) => e.preventDefault();
@@ -68,7 +70,7 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('dragstart', onDragStart);
-    el.addEventListener('click', onClick, true);
+    window.addEventListener('click', onClick, true);
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     return () => {
@@ -77,7 +79,7 @@ export default function ScrollRow({ className = '', wrapperClassName = '', child
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('dragstart', onDragStart);
-      el.removeEventListener('click', onClick, true);
+      window.removeEventListener('click', onClick, true);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };

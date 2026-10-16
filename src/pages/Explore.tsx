@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import GameRow from '../components/GameRow';
 import ScrollRow from '../components/ScrollRow';
@@ -19,6 +19,18 @@ import { MODES } from '../lib/mode';
 import type { Game } from '../lib/types';
 import { useMode } from '../store/useUi';
 
+interface Snapshot {
+  /** What was loaded: mode, key, filters and page. */
+  sig: string;
+  games: Game[];
+  page: number;
+  hasMore: boolean;
+  scrollY: number;
+}
+
+/** What each visited Explore entry had loaded, so going back from a game lands on the same spot. */
+const snapshots = new Map<string, Snapshot>();
+
 export default function Explore() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -26,14 +38,47 @@ export default function Explore() {
   const keys = useKeys();
   const key = keyFor(mode, keys);
   const filters = filtersFromParams(params, mode);
-  const [games, setGames] = useState<Game[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const id = JSON.stringify(filters);
+  const location = useLocation();
+  const navType = useNavigationType();
+  // Only coming back (browser back, "Volver") restores; opening Explore anew starts from the top.
+  const [saved] = useState(() => (navType === 'POP' ? snapshots.get(location.key) : undefined));
+  const [games, setGames] = useState<Game[]>(saved?.games ?? []);
+  const [page, setPage] = useState(saved?.page ?? 1);
+  const [hasMore, setHasMore] = useState(saved?.hasMore ?? false);
+  const [loading, setLoading] = useState(!saved);
+  const [error, setError] = useState<string | null>(null);
+  const base = `${mode}|${key}|${id}`;
+  const sig = `${base}|${page}`;
+  const loaded = useRef(saved?.sig ?? '');
+
+  // Kept current for the snapshot taken when leaving the page.
+  const latest = useRef({ entry: location.key, base, games, page, hasMore, loading });
+  latest.current = { entry: location.key, base, games, page, hasMore, loading };
+
+  useLayoutEffect(() => {
+    // Runs after ScrollToTop, which sends every new page to the top.
+    if (saved) window.scrollTo(0, saved.scrollY);
+    return () => {
+      // Layout cleanup: the next page hasn't scrolled to the top yet.
+      const s = latest.current;
+      if (!s.games.length) return;
+      // A page still loading is dropped; "Cargar más" brings it again.
+      const page = s.loading ? s.page - 1 : s.page;
+      snapshots.delete(s.entry);
+      snapshots.set(s.entry, {
+        sig: `${s.base}|${page}`,
+        games: s.games,
+        page,
+        hasMore: s.loading || s.hasMore,
+        scrollY: window.scrollY,
+      });
+      if (snapshots.size > 10) snapshots.delete(snapshots.keys().next().value!);
+    };
+  }, []);
 
   useEffect(() => {
+    if (loaded.current === sig) return;
     const ctrl = new AbortController();
     setLoading(true);
     setError(null);
@@ -42,6 +87,7 @@ export default function Explore() {
       .then((r) => {
         setGames((prev) => (page === 1 ? r.games : [...prev, ...r.games.filter((g) => !prev.some((p) => p.id === g.id))]));
         setHasMore(r.hasMore);
+        loaded.current = sig;
       })
       .catch((e: Error) => e.name !== 'AbortError' && setError(e.message))
       .finally(() => !ctrl.signal.aborted && setLoading(false));
