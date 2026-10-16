@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Cover from '../components/Cover';
+import TierSection, { CoverScore } from '../components/TierSection';
 import { KINDS } from '../lib/kinds';
 import { MODES, kindOf, modeOf, type Mode } from '../lib/mode';
 import { fetchPublicProfile, type PublicProfile as Profile } from '../lib/sync';
@@ -165,37 +166,24 @@ export default function PublicProfile() {
       {rated.length === 0 ? (
         <p className="mx-5 mt-8 rounded-3xl border border-dashed border-line p-6 text-center text-muted">Todavía no puntuó {what}.</p>
       ) : (
-        <div className="mt-5 space-y-2 px-5">
+        <div className="mt-5 space-y-2.5 px-5">
           {[...TIERS].reverse().map((tier) => {
             const items = rated.filter((r) => r.tier === tier.id);
             if (!items.length) return null;
             return (
-              <div key={tier.id} className="flex overflow-hidden rounded-2xl border bg-surface" style={{ borderColor: `${tier.color}40` }}>
-                <div
-                  className="flex w-[78px] shrink-0 flex-col items-center justify-center gap-0.5 py-3 text-black lg:w-[120px]"
-                  style={{ background: `linear-gradient(160deg, ${tier.color}, ${tier.color}cc)` }}
-                >
-                  <span className="text-2xl leading-none">{tier.emoji}</span>
-                  <span className="font-display text-[13px] leading-tight font-bold">{tier.label}</span>
-                  <span className="mt-1 rounded-full bg-black/15 px-2 py-0.5 font-display text-xs leading-none font-bold tabular-nums">{items.length}</span>
-                </div>
-                <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-2 p-2 lg:grid-cols-[repeat(auto-fill,minmax(92px,1fr))]">
+              <TierSection key={tier.id} tier={tier} count={items.length}>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2 px-4 pb-3 lg:grid-cols-[repeat(auto-fill,minmax(92px,1fr))]">
                   {items.map((r) => {
                     const game = profile.games[r.gameId];
                     return (
                       <div key={r.gameId} className="relative" title={`${game.name} · ${r.score}`}>
                         <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
-                        <span
-                          className="absolute right-1 bottom-1 rounded-md bg-black/80 px-1 font-display text-[11px] font-bold tabular-nums backdrop-blur"
-                          style={{ color: tier.color }}
-                        >
-                          {r.score}
-                        </span>
+                        <CoverScore score={r.score} color={tier.color} />
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </TierSection>
             );
           })}
         </div>
