@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BookOpen, ChevronRight, LayoutGrid, Rows3, Share2 } from 'lucide-react';
 import { KINDS } from '../lib/kinds';
@@ -14,6 +14,7 @@ import { useMode } from '../store/useUi';
 import { MODES, kindOf, modeOf } from '../lib/mode';
 import TierIcon from '../components/TierIcon';
 import { useIsDesktop } from '../lib/useMedia';
+import { useFitWidth } from '../lib/useFitWidth';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
@@ -208,32 +209,9 @@ function TierList({ entries, onTier }: { entries: Entry[]; onTier: (id: TierId) 
 const ROW_MARGIN = 16;
 const ROW_GAP = 8;
 
-/**
- * Width that fits a whole number of covers in the row, each at least `min` wide,
- * so the last visible one is never cut in half; the rest are a scroll away.
- */
-function useFitWidth(min: number, active: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState<number>();
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      const inner = el.clientWidth - 2 * ROW_MARGIN;
-      const n = Math.max(1, Math.floor((inner + ROW_GAP) / (min + ROW_GAP)));
-      setWidth((inner - (n - 1) * ROW_GAP) / n);
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [min, active]);
-  return [ref, width] as const;
-}
-
 function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTier: (id: TierId) => void }) {
   // An empty tier renders no row, so measuring starts once it has something.
-  const [ref, width] = useFitWidth(useIsDesktop() ? 92 : 72, entries.length > 0);
+  const [ref, width] = useFitWidth({ min: useIsDesktop() ? 92 : 72, gap: ROW_GAP, inset: 2 * ROW_MARGIN, active: entries.length > 0 });
   return (
     <TierSection tier={tier} count={entries.length} onOpen={() => onTier(tier.id)}>
       <div ref={ref}>

@@ -1,17 +1,37 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Cover from './Cover';
 import { ScoreBadge } from './Score';
 import { year } from '../lib/format';
 import type { Game } from '../lib/types';
 import { useStore } from '../store/useStore';
+import ListIcon from './ListIcon';
 
-export default function GameCard({ game, note }: { game: Game; note?: string }) {
+/** At most this many list badges on a cover; the rest are in the tooltip. */
+const MAX_BADGES = 2;
+
+export default function GameCard({ game, note, width }: { game: Game; note?: string; width?: number }) {
   const rating = useStore((s) => s.ratings[game.id]);
   const rememberGame = useStore((s) => s.rememberGame);
+  const allLists = useStore((s) => s.lists);
+  // The lists this title is already on, shown as their icons on the cover.
+  const lists = useMemo(() => allLists.filter((l) => l.gameIds.includes(game.id)), [allLists, game.id]);
   return (
-    <Link to={`/juego/${encodeURIComponent(game.id)}`} onClick={() => rememberGame(game)} className="group block w-32 shrink-0 lg:w-40">
+    <Link
+      to={`/juego/${encodeURIComponent(game.id)}`}
+      onClick={() => rememberGame(game)}
+      className="group block w-32 shrink-0 lg:w-40"
+      style={width ? { width } : undefined}
+    >
       <div className="relative">
         <Cover game={game} className="aspect-[3/4] rounded-2xl text-xs transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl" />
+        {lists.length > 0 && (
+          <span className="absolute top-1.5 left-1.5 flex gap-1" title={`En ${lists.map((l) => l.name).join(', ')}`}>
+            {lists.slice(0, MAX_BADGES).map((l) => (
+              <ListIcon key={l.id} list={l} size="xs" />
+            ))}
+          </span>
+        )}
         {rating ? (
           <span className="absolute top-1.5 right-1.5 rounded-lg bg-black/75 backdrop-blur">
             <ScoreBadge score={rating.score} />

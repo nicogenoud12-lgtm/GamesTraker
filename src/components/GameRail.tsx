@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import GameCard, { GameCardSkeleton } from './GameCard';
 import ScrollRow from './ScrollRow';
+import { useFitWidth } from '../lib/useFitWidth';
+import { useIsDesktop } from '../lib/useMedia';
 import type { Game } from '../lib/types';
 
 interface Props {
@@ -15,7 +17,13 @@ interface Props {
 }
 
 /** Horizontal row of game covers with a "see all" link. Hidden when empty. */
+/** Padding and gap of the row (`px-5`, `gap-3`), in px. */
+const ROW_PAD = 20;
+const ROW_GAP = 12;
+
 export default function GameRail({ title, subtitle, games, error, more, notes }: Props) {
+  // On desktop the covers share the row evenly (8 on a wide screen); the next one peeks into the padding, blurred.
+  const [ref, width] = useFitWidth({ min: useIsDesktop() ? 136 : null, gap: ROW_GAP, inset: 2 * ROW_PAD, active: !error });
   if (games && games.length === 0 && !error) return null;
   return (
     <section className="mt-7">
@@ -33,9 +41,13 @@ export default function GameRail({ title, subtitle, games, error, more, notes }:
       {error ? (
         <p className="px-5 text-sm text-rose-400">{error}</p>
       ) : (
-        <ScrollRow className="flex gap-3 px-5 pb-1">
-          {games ? games.map((g) => <GameCard key={g.id} game={g} note={notes?.[g.id]} />) : Array.from({ length: 4 }, (_, i) => <GameCardSkeleton key={i} />)}
-        </ScrollRow>
+        <div ref={ref}>
+          <ScrollRow className="flex gap-3 px-5 pb-1" edgeBlur>
+            {games
+              ? games.map((g) => <GameCard key={g.id} game={g} note={notes?.[g.id]} width={width} />)
+              : Array.from({ length: 4 }, (_, i) => <GameCardSkeleton key={i} />)}
+          </ScrollRow>
+        </div>
       )}
     </section>
   );
