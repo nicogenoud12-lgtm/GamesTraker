@@ -28,6 +28,7 @@ import { useStore } from './store/useStore';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 import CoverTransition from './components/CoverTransition';
+import GradualBlur from './components/reactbits/GradualBlur';
 
 export default function App() {
   useEffect(() => startSync(), []);
@@ -90,6 +91,22 @@ export default function App() {
         </Routes>
       </main>
       <TabBar />
+      {/* Desktop only: on phones the tab bar is already frosted glass. Starts right of the sidebar, below sheets and toasts. */}
+      <GradualBlur
+        target="page"
+        position="bottom"
+        height="6rem"
+        strength={2}
+        layers={8}
+        curve="linear"
+        exponential
+        tint="rgba(11, 11, 16, 0.6)"
+        autoHide
+        opacity={0.3}
+        zIndex={30}
+        className="hidden lg:block"
+        style={{ left: '16rem' }}
+      />
       <Toast />
     </div>
   );
