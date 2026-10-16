@@ -21,7 +21,8 @@ import Diary from './pages/Diary';
 import PublicProfile from './pages/PublicProfile';
 import Friends from './pages/Friends';
 import { startNotices } from './lib/social';
-import { refreshSavedTitles } from './lib/latam';
+import { refreshSavedCovers, refreshSavedTitles } from './lib/savedTitles';
+import { useSync } from './store/useSync';
 import { useStore } from './store/useStore';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
@@ -33,6 +34,9 @@ export default function App() {
   // The TMDB key may arrive later, with the first sync on a new device.
   const tmdbKey = useStore((s) => s.tmdbKey);
   useEffect(() => void refreshSavedTitles(), [tmdbKey]);
+  // Covers come from our server: once signed in.
+  const token = useSync((s) => s.token);
+  useEffect(() => void refreshSavedCovers(), [token]);
   const mode = useMode();
   useEffect(() => {
     document.documentElement.dataset.mode = mode;

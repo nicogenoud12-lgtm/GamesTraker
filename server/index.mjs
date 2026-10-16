@@ -1,6 +1,6 @@
 // GamesTracker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
-// critic-score lookup (Steam's Metacritic, optionally IGDB), game lengths
+// critic-score lookup (Steam's Metacritic, optionally IGDB), game covers and lengths
 // (HowLongToBeat, or IGDB), IMDb ratings (from IMDb's daily public file), Rotten
 // Tomatoes scores, friends, notifications and Trakt (Nuvio).
 // No dependencies; everything lives under DATA_DIR.
@@ -38,6 +38,8 @@ const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000;
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID ?? '';
 const IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET ?? '';
+const IGDB_API = process.env.IGDB_API_URL ?? 'https://api.igdb.com/v4';
+const TWITCH_TOKEN_URL = process.env.TWITCH_TOKEN_URL ?? 'https://id.twitch.tv/oauth2/token';
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -258,15 +260,25 @@ let twitchToken = null;
 async function igdbToken(refresh = false) {
   if (!refresh && twitchToken && Date.now() < twitchToken.until) return twitchToken.value;
   const qs = new URLSearchParams({ client_id: IGDB_CLIENT_ID, client_secret: IGDB_CLIENT_SECRET, grant_type: 'client_credentials' });
-  const res = await fetch(`https://id.twitch.tv/oauth2/token?${qs}`, { method: 'POST' });
+  const res = await fetch(`${TWITCH_TOKEN_URL}?${qs}`, { method: 'POST' });
   if (!res.ok) throw new HttpError(502, 'Twitch rechazó IGDB_CLIENT_ID / IGDB_CLIENT_SECRET');
   const json = await res.json();
   twitchToken = { value: json.access_token, until: Date.now() + (json.expires_in - 3600) * 1000 };
   return twitchToken.value;
 }
 
+// IGDB allows 4 requests per second; every call waits its turn.
+let igdbNextAt = 0;
+async function igdbTurn() {
+  const now = Date.now();
+  const at = Math.max(now, igdbNextAt);
+  igdbNextAt = at + 260;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
+}
+
 async function igdbQuery(body, retry = true, endpoint = 'games') {
-  const res = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+  await igdbTurn();
+  const res = await fetch(`${IGDB_API}/${endpoint}`, {
     method: 'POST',
     headers: { 'Client-ID': IGDB_CLIENT_ID, Authorization: `Bearer ${await igdbToken(!retry)}`, 'Content-Type': 'text/plain' },
     body,
@@ -572,6 +584,80 @@ async function gameLength(name, year) {
     lengths.set(key, { at: Date.now(), value });
   }
   return value;
+}
+
+// ---------- covers (IGDB) ----------
+// RAWG only has a landscape background (often a screenshot) and sometimes nothing;
+// IGDB has the actual box art. Found by name and year, and kept on disk: a game's
+// cover doesn't change, so each one is asked for once.
+
+const COVERS_FILE = path.join(DATA_DIR, 'covers.json');
+const COVER_MISS_TTL = 7 * 864e5;
+let coverIndex = null;
+let coverSaveTimer = null;
+
+async function loadCovers() {
+  coverIndex ??= new Map(Object.entries(await readJson(COVERS_FILE, {})));
+  return coverIndex;
+}
+
+function saveCoversSoon() {
+  clearTimeout(coverSaveTimer);
+  coverSaveTimer = setTimeout(() => void serial(() => writeJson(COVERS_FILE, Object.fromEntries(coverIndex))), 5000);
+}
+
+// RAWG tells duplicates apart with the year: "Soulcalibur (1998)".
+const coverName = (name) => String(name).replace(/\s*\((19|20)\d{2}\)\s*$/, '').trim();
+const igdbString = (s) => `"${String(s).replace(/["\\]/g, ' ').slice(0, 120)}"`;
+const coverUrl = (g) => (g?.cover?.image_id ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${g.cover.image_id}.jpg` : null);
+const COVER_FIELDS = 'fields name,first_release_date,cover.image_id;';
+
+/** Covers for up to 40 games: one query for the exact names, a search for each one left. */
+async function findCovers(games) {
+  const found = new Map();
+  const results = await igdbQuery(
+    `${COVER_FIELDS} where ${games.map((g) => `name ~ ${igdbString(coverName(g.name))}`).join(' | ')}; limit 500;`,
+  );
+  const missing = [];
+  for (const g of games) {
+    const match = pickMatch(results, coverName(g.name), g.year);
+    if (coverUrl(match)) found.set(g.id, coverUrl(match));
+    else missing.push(g);
+  }
+  // Names that differ between catalogs ("Final Fantasy VII Remake Intergrade"): one search each.
+  for (const g of missing.slice(0, 8)) {
+    const match = pickMatch(await igdbQuery(`search ${igdbString(coverName(g.name))}; ${COVER_FIELDS} limit 20;`), coverName(g.name), g.year);
+    found.set(g.id, coverUrl(match));
+  }
+  return found;
+}
+
+/** `{ id: url | null }`; games left out couldn't be looked up now (no IGDB, or it's down). */
+async function gameCovers(list) {
+  const index = await loadCovers();
+  const out = {};
+  const todo = [];
+  for (const g of list) {
+    const hit = index.get(g.id);
+    if (hit && (hit.url || Date.now() - hit.at < COVER_MISS_TTL)) out[g.id] = hit.url;
+    else todo.push(g);
+  }
+  if (!todo.length || !igdbEnabled()) return out;
+  try {
+    for (let i = 0; i < todo.length; i += 40) {
+      const chunk = todo.slice(i, i + 40);
+      const found = await findCovers(chunk);
+      for (const g of chunk) {
+        if (!found.has(g.id)) continue;
+        out[g.id] = found.get(g.id);
+        index.set(g.id, { url: found.get(g.id), at: Date.now() });
+      }
+    }
+  } catch (e) {
+    console.error(`covers: ${e.message}`);
+  }
+  saveCoversSoon();
+  return out;
 }
 
 // ---------- Rotten Tomatoes ----------
@@ -1164,7 +1250,7 @@ async function traktCheckAll() {
 // A canvas can only be exported if its images come from our own origin, so
 // covers for the share images are fetched through here. Only these hosts.
 
-const IMAGE_HOSTS = new Set(['media.rawg.io', 'image.tmdb.org']);
+const IMAGE_HOSTS = new Set(['media.rawg.io', 'image.tmdb.org', 'images.igdb.com']);
 const MAX_IMAGE = 8 * 1024 * 1024;
 
 async function proxyImage(res, raw) {
@@ -1353,6 +1439,16 @@ async function handle(req, res) {
       const name = url.searchParams.get('name')?.trim();
       if (!name) throw new HttpError(400, 'Falta el nombre del juego');
       return send(res, 200, { length: await gameLength(name.slice(0, 200), Number(url.searchParams.get('year')) || null) });
+    }
+    case 'POST /api/covers': {
+      // Signed-in only: it spends the server's IGDB quota.
+      await authenticate(req);
+      const body = await readBody(req);
+      const list = (Array.isArray(body?.games) ? body.games : [])
+        .slice(0, 120)
+        .map((g) => ({ id: str(g?.id, 40), name: str(g?.name, 200), year: Number(g?.year) || null }))
+        .filter((g) => g.id && /^rawg:\d+$/.test(g.id) && g.name);
+      return send(res, 200, { covers: await gameCovers(list) });
     }
     case 'GET /api/rt': {
       await authenticate(req);

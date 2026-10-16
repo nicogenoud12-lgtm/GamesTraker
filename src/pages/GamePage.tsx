@@ -25,6 +25,7 @@ import {
   tomatoScores,
 } from '../lib/critics';
 import { roughHours } from '../lib/durations';
+import { useGameCover } from '../lib/covers';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
@@ -166,6 +167,8 @@ export default function GamePage() {
   }, [imdbId]);
 
   const game: Game | null = detail ?? snapshot ?? null;
+  // The poster: IGDB's box art for games (RAWG's landscape image stays as the backdrop).
+  const poster = useGameCover(game ?? { id: gameId, name: '', cover: null });
 
   if (!game) {
     return (
@@ -180,8 +183,8 @@ export default function GamePage() {
 
   const playing = lists.find((l) => l.id === copy.nowListId)?.gameIds.includes(game.id) ?? false;
   const inLists = lists.filter((l) => l.gameIds.includes(game.id));
-  const generatedCover = !game.cover || game.cover.startsWith('data:');
-  const coverSrc = game.cover?.startsWith('data:') ? game.cover : (resizeImage(game.cover, 640) ?? undefined);
+  const generatedCover = !poster.waiting && (!poster.cover || poster.cover.startsWith('data:'));
+  const coverSrc = poster.cover?.startsWith('data:') ? poster.cover : (resizeImage(poster.cover, 640) ?? undefined);
 
   const togglePlaying = () => {
     if (playing) {

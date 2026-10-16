@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localDay, uid } from '../lib/format';
+import { bestCover } from '../lib/covers';
 import type { Game, GameList, LogEntry, Rating } from '../lib/types';
 
 import {
@@ -77,8 +78,9 @@ function touch(lists: GameList[], id: string, fn: (l: GameList) => GameList): Ga
 }
 
 function snapshot(game: Game): Game {
-  const { id, name, cover, released, genres, platforms } = game;
-  return { id, name, cover, released, genres, platforms };
+  const { id, name, released, genres, platforms } = game;
+  // IGDB's box art when it's known (it is, once the game was on screen).
+  return { id, name, cover: bestCover(game), released, genres, platforms };
 }
 
 export const useStore = create<State>()(

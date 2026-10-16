@@ -7,6 +7,7 @@ import Sheet from '../components/Sheet';
 import ListIcon, { LIST_ICONS, ListGlyph } from '../components/ListIcon';
 import CircularCarousel from '../components/reactbits/CircularCarousel';
 import { resizeImage } from '../lib/rawg';
+import { bestCover } from '../lib/covers';
 import { useIsDesktop } from '../lib/useMedia';
 import type { Game, GameList } from '../lib/types';
 import { useStore } from '../store/useStore';
@@ -108,8 +109,9 @@ export default function Lists() {
 }
 
 function coverSrc(g: Game): string | null {
-  if (!g.cover) return null;
-  return g.cover.startsWith('data:') ? g.cover : resizeImage(g.cover, 420);
+  const cover = bestCover(g);
+  if (!cover) return null;
+  return cover.startsWith('data:') ? cover : resizeImage(cover, 420);
 }
 
 function ListCard({ list, games }: { list: GameList; games: Record<string, Game> }) {

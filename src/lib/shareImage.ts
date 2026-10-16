@@ -1,4 +1,5 @@
 import { resizeImage } from './rawg';
+import { bestCover } from './covers';
 import type { Game } from './types';
 
 // Story-sized images (1080×1920) drawn on a canvas, for sharing a rating or
@@ -9,9 +10,10 @@ export const W = 1080;
 export const H = 1920;
 
 export function coverUrl(game: Game): string | null {
-  if (!game.cover) return null;
-  if (game.cover.startsWith('data:')) return game.cover;
-  const src = resizeImage(game.cover, 640) ?? game.cover;
+  const cover = bestCover(game);
+  if (!cover) return null;
+  if (cover.startsWith('data:')) return cover;
+  const src = resizeImage(cover, 640) ?? cover;
   return `/api/img?${new URLSearchParams({ url: src })}`;
 }
 

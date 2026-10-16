@@ -160,6 +160,14 @@ servidor busca en [Wikidata](https://www.wikidata.org) la página de Rotten Toma
 y lee los puntajes de ahí. No hace falta configurar nada; si Rotten Tomatoes no responde, la ficha se muestra
 sin esos dos.
 
+### Carátulas de los juegos (IGDB)
+
+RAWG no tiene la tapa de los juegos: solo una imagen horizontal de fondo (muchas veces una captura) y a veces
+nada. Con IGDB configurado (ver abajo), la app muestra la **carátula oficial de IGDB** y deja la de RAWG solo
+si IGDB no la tiene. El servidor la busca por nombre y año, la guarda en `covers.json` (en el volumen de datos)
+y no la vuelve a pedir. Los juegos repetidos de RAWG ("Soulcalibur" y "Soulcalibur (1998)") se muestran una sola
+vez.
+
 ### Cuánto dura un juego (HowLongToBeat)
 
 La ficha de cada juego muestra cuánto dura según [HowLongToBeat](https://howlongtobeat.com): el número grande
@@ -179,7 +187,7 @@ positivas, acercado al 50% cuando hay pocas reseñas.
 
 Para juegos que no están en Steam se puede sumar, opcionalmente, la nota de críticos de
 [IGDB](https://www.igdb.com) (promedio de reseñas de medios), que el servidor pide con una app de Twitch.
-IGDB también da la duración de los juegos cuando HowLongToBeat no responde:
+IGDB también da las carátulas de los juegos y su duración cuando HowLongToBeat no responde:
 
 1. Entrá a <https://dev.twitch.tv/console> con tu cuenta de Twitch (hace falta tener activada la verificación
    en dos pasos) y tocá **Register Your Application**.
