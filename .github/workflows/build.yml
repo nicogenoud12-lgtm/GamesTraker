@@ -51,6 +51,9 @@ jobs:
           # El índice de juegos populares es solo con sesión (sin key de RAWG en CI, todavía no existe).
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8787/api/games/index)" = 401
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" localhost:8787/api/games/index)" = 404
+          # Lo mejor del año desde IGDB: solo con sesión, valida el período y, sin IGDB, avisa (la app usa RAWG).
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'localhost:8787/api/games/discover?from=2026-01-01&to=2026-12-31&order=best')" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/games/discover?from=2026-01-01&to=2026-12-31&order=best')" = 503
           # Sin IGDB configurado, las carátulas quedan las de RAWG (no devuelve ninguna).
           curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
             -d '{"games":[{"id":"rawg:1","name":"Hades","year":2020}]}' localhost:8787/api/covers | grep -q '"covers":{}'

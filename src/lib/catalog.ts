@@ -1,11 +1,12 @@
 import { DEMO_GAMES, demoSearch } from '../data/demo';
 import { DEMO_SCREEN, demoScreenSearch } from '../data/demoScreen';
-import { type DiscoverFilters, filterDemo, filterDemoScreen, genreSlug, toRawgQuery, toTmdbQuery } from './discover';
+import { type DiscoverFilters, filterDemo, filterDemoScreen, genreSlug, serverDiscoverQuery, toRawgQuery, toTmdbQuery } from './discover';
 import { kindOf, type Mode } from './mode';
 import { rawgDetail, rawgDiscover, rawgPopular, rawgSearch, rawgSeries } from './rawg';
 import { tmdbCollection, tmdbDetail, tmdbList, tmdbRecommendations, tmdbSearch, tmdbTrending } from './tmdb';
 import type { Game, GameDetail } from './types';
 import { useStore } from '../store/useStore';
+import { useSync } from '../store/useSync';
 
 // Single entry point for catalog data. Games come from RAWG, series & movies
 // from TMDB; without a key each mode falls back to its bundled demo catalog.
@@ -114,11 +115,55 @@ export async function discoverItems(
 ): Promise<{ games: Game[]; hasMore: boolean }> {
   if (mode === 'games') {
     if (!keys.rawg) return { games: page === 1 ? filterDemo(DEMO_GAMES, filters) : [], hasMore: false };
+    const fromServer = await serverDiscover(filters, page, signal);
+    if (fromServer) return fromServer;
     return rawgDiscover(keys.rawg, toRawgQuery(filters), page, signal);
   }
   if (!keys.tmdb) return { games: page === 1 ? filterDemoScreen(DEMO_SCREEN, filters) : [], hasMore: false };
   const { path, params } = toTmdbQuery(filters);
   return tmdbList(keys.tmdb, filters.kind, path, params, page, signal);
+}
+
+interface ServerGame {
+  id: string;
+  name: string;
+  released: string | null;
+  cover: string | null;
+  genres: string[];
+  platforms: string[];
+  critic: number | null;
+  users: number | null;
+}
+
+/**
+ * Recent periods by critics or popularity, from IGDB through our server. Null to
+ * use RAWG instead: signed out, an older server, IGDB not set up or down, or no results.
+ */
+async function serverDiscover(filters: DiscoverFilters, page: number, signal?: AbortSignal) {
+  const q = serverDiscoverQuery(filters, page);
+  const token = useSync.getState().token;
+  if (!q || !token) return null;
+  try {
+    const res = await fetch(`/api/games/discover?${q}`, { headers: { Authorization: `Bearer ${token}` }, signal });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { games: ServerGame[]; hasMore: boolean };
+    if (page === 1 && !data.games.length) return null;
+    const games: Game[] = data.games.map((g) => ({
+      id: g.id,
+      name: g.name,
+      released: g.released,
+      cover: g.cover,
+      genres: g.genres,
+      platforms: g.platforms,
+      metacritic: g.critic,
+      ...(g.critic != null ? { scoreLabel: 'IGDB' } : {}),
+      ...(g.users != null ? { userScore: g.users, userLabel: 'IGDB' } : {}),
+    }));
+    return { games, hasMore: data.hasMore };
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    return null;
+  }
 }
 
 /** Trending this week (series & movies mode). */

@@ -702,7 +702,14 @@ function indexEntry(g) {
 
 function loadIndexData(data) {
   const body = Buffer.from(JSON.stringify({ builtAt: data.builtAt, media: RAWG_MEDIA, games: data.games }));
-  gamesIndex = { builtAt: data.builtAt, count: data.games.length, etag: `"${data.builtAt}"`, gzip: gzipSync(body), body };
+  // By simplified name too, to find RAWG's id for a game another catalog (IGDB) names.
+  const byName = new Map();
+  for (const e of data.games) {
+    const k = simplify(coverName(e[1]));
+    if (!byName.has(k)) byName.set(k, []);
+    byName.get(k).push(e);
+  }
+  gamesIndex = { builtAt: data.builtAt, count: data.games.length, etag: `"${data.builtAt}"`, gzip: gzipSync(body), body, byName };
 }
 
 async function buildGamesIndex() {
@@ -763,6 +770,163 @@ function sendGamesIndex(req, res) {
     ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
   });
   res.end(gzip ? gamesIndex.gzip : gamesIndex.body);
+}
+
+// ---------- discover by period (IGDB) ----------
+// RAWG stopped getting Metacritic scores for new games, so "the best of this year"
+// came back empty there. IGDB has critics' and players' averages for recent games
+// and how much people are looking at them; its results are matched back to RAWG
+// ids (the popular index first, RAWG's search after) so the app opens them as usual.
+
+// RAWG genre slugs and parent platform ids (the app's filters) → IGDB conditions.
+const IGDB_GENRES = {
+  action: 'themes = (1)',
+  'role-playing-games-rpg': 'genres = (12)',
+  adventure: 'genres = (31)',
+  shooter: 'genres = (5)',
+  indie: 'genres = (32)',
+  platformer: 'genres = (8)',
+  strategy: 'genres = (11,15,16,24)',
+  puzzle: 'genres = (9)',
+  simulation: 'genres = (13)',
+  racing: 'genres = (10)',
+  sports: 'genres = (14)',
+  fighting: 'genres = (4)',
+  arcade: 'genres = (33)',
+  casual: 'genres = (9,26,35)',
+};
+const IGDB_PLATFORMS = {
+  1: '6',
+  2: '7,8,9,38,46,48,167',
+  3: '11,12,49,169',
+  7: '4,5,18,19,20,21,22,24,33,37,41,130,508',
+  4: '39',
+  8: '34',
+};
+const DISCOVER_FIELDS =
+  'fields name,first_release_date,aggregated_rating,aggregated_rating_count,rating,rating_count,cover.image_id,genres.name,platforms.abbreviation;';
+// Main games, standalone expansions, remakes, remasters and expanded editions; no DLC, bundles or ports.
+const MAIN_GAMES = ['game_type = (0,4,8,9,10)', 'category = (0,4,8,9,10)'];
+const DISCOVER_TTL = 6 * 3600e3;
+const discovered = new Map();
+const RAWG_MATCH_TTL = 7 * 864e5;
+const rawgMatches = new Map();
+let popularity = null;
+
+/** IGDB's most visited games right now, as id → rank. */
+async function popularityRanks() {
+  if (popularity && Date.now() - popularity.at < DISCOVER_TTL) return popularity.ranks;
+  const rows = await igdbQuery('fields game_id,value; where popularity_type = 1; sort value desc; limit 500;', true, 'popularity_primitives');
+  const ranks = new Map(rows.map((r, i) => [r.game_id, i]));
+  popularity = { at: Date.now(), ranks };
+  return ranks;
+}
+
+/** IGDB query, trying the newer `game_type` filter first and the older `category` if IGDB rejects it. */
+async function igdbMainGames(where, tail) {
+  let error;
+  for (const kind of MAIN_GAMES) {
+    try {
+      return await igdbQuery(`${DISCOVER_FIELDS} where ${[...where, kind, 'version_parent = null'].join(' & ')}; ${tail}`);
+    } catch (e) {
+      error = e;
+    }
+  }
+  throw error;
+}
+
+/** RAWG's entry for an IGDB game: the popular index, else RAWG's search. Null when there's no good match. */
+async function rawgMatch(name, year) {
+  const k = `${simplify(name)}|${year ?? ''}`;
+  const hit = rawgMatches.get(k);
+  if (hit && Date.now() - hit.at < RAWG_MATCH_TTL) return hit.game;
+  const fromIndex = gamesIndex?.byName?.get(simplify(name)) ?? [];
+  let game = null;
+  const indexed = pickMatch(fromIndex, name, year, (e) => e[1], (e) => (e[2] ? Number(e[2].slice(0, 4)) : null));
+  if (indexed) {
+    const [id, n, released, image, genres, platforms] = indexed;
+    game = { id, name: n, released, image: image && !image.startsWith('http') ? RAWG_MEDIA + image : image, genres, platforms };
+  } else {
+    const key = await rawgKey();
+    if (!key) return null;
+    const qs = new URLSearchParams({ key, search: name, page_size: '10', exclude_additions: 'true' });
+    const res = await fetch(`${RAWG_API}/games?${qs}`, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new HttpError(502, `Error de RAWG (${res.status})`);
+    const results = (await res.json())?.results ?? [];
+    const r = pickMatch(results, name, year, (g) => coverName(g.name), (g) => (g.released ? Number(g.released.slice(0, 4)) : null));
+    if (r)
+      game = {
+        id: r.id,
+        name: r.name,
+        released: r.released ?? null,
+        image: r.background_image ?? null,
+        genres: (r.genres ?? []).slice(0, 3).map((x) => x.name),
+        platforms: (r.platforms ?? []).slice(0, 4).map((x) => x.platform?.name).filter(Boolean),
+      };
+  }
+  rawgMatches.set(k, { at: Date.now(), game });
+  return game;
+}
+
+/**
+ * One page (20) of games released between `from` and `to`, best rated by critics
+ * or most popular, as the app's games with critics' and players' scores apart.
+ */
+async function discoverGames({ from, to, order, genre, platform, page }) {
+  const cacheKey = JSON.stringify([from, to, order, genre, platform, page]);
+  const hit = discovered.get(cacheKey);
+  if (hit && Date.now() - hit.at < DISCOVER_TTL) return hit.data;
+
+  const day = (d) => Math.floor(Date.parse(`${d}T00:00:00Z`) / 1000);
+  const where = [`first_release_date >= ${day(from)}`, `first_release_date < ${day(to) + 86400}`];
+  if (genre) where.push(IGDB_GENRES[genre]);
+  if (platform) where.push(`platforms = (${IGDB_PLATFORMS[platform]})`);
+
+  let rows;
+  let hasMore;
+  if (order === 'best') {
+    // A few reviews at least, so one generous outlet doesn't top the list.
+    const found = await igdbMainGames([...where, 'aggregated_rating_count >= 3'], `sort aggregated_rating desc; limit 21; offset ${(page - 1) * 20};`);
+    hasMore = found.length > 20;
+    rows = found.slice(0, 20);
+  } else {
+    const ranks = await popularityRanks();
+    const found = ranks.size ? await igdbMainGames([...where, `id = (${[...ranks.keys()].join(',')})`], 'limit 500;') : [];
+    found.sort((a, b) => ranks.get(a.id) - ranks.get(b.id));
+    hasMore = found.length > page * 20;
+    rows = found.slice((page - 1) * 20, page * 20);
+  }
+
+  // A few RAWG lookups at a time; the popular index answers most without asking RAWG.
+  const games = [];
+  for (let i = 0; i < rows.length; i += 4) {
+    const batch = await Promise.all(
+      rows.slice(i, i + 4).map(async (g) => {
+        const year = yearOf(g.first_release_date);
+        const rawg = await rawgMatch(g.name, year).catch((e) => {
+          console.error(`discover: ${e.message}`);
+          return null;
+        });
+        if (!rawg) return null;
+        return {
+          id: `rawg:${rawg.id}`,
+          name: rawg.name,
+          released: rawg.released ?? (g.first_release_date ? new Date(g.first_release_date * 1000).toISOString().slice(0, 10) : null),
+          cover: coverUrl(g) ?? rawg.image ?? null,
+          genres: rawg.genres?.length ? rawg.genres : (g.genres ?? []).slice(0, 3).map((x) => x.name),
+          platforms: rawg.platforms?.length ? rawg.platforms : (g.platforms ?? []).slice(0, 4).map((x) => x.abbreviation).filter(Boolean),
+          critic: g.aggregated_rating && (g.aggregated_rating_count ?? 0) >= 1 ? Math.round(g.aggregated_rating) : null,
+          criticCount: g.aggregated_rating_count ?? 0,
+          users: g.rating && (g.rating_count ?? 0) >= 5 ? Math.round(g.rating) : null,
+          usersCount: g.rating_count ?? 0,
+        };
+      }),
+    );
+    games.push(...batch.filter(Boolean));
+  }
+  const data = { games, hasMore, source: 'igdb' };
+  discovered.set(cacheKey, { at: Date.now(), data });
+  return data;
 }
 
 // ---------- Rotten Tomatoes ----------
@@ -1633,6 +1797,22 @@ async function handle(req, res) {
         .map((g) => ({ id: str(g?.id, 40), name: str(g?.name, 200), year: Number(g?.year) || null }))
         .filter((g) => g.id && /^rawg:\d+$/.test(g.id) && g.name);
       return send(res, 200, { covers: await gameCovers(list) });
+    }
+    case 'GET /api/games/discover': {
+      // Signed-in only: it spends the server's IGDB quota.
+      await authenticate(req);
+      if (!igdbEnabled()) throw new HttpError(503, 'IGDB no está configurado en el servidor');
+      const q = url.searchParams;
+      const date = /^\d{4}-\d{2}-\d{2}$/;
+      const from = q.get('from') ?? '';
+      const to = q.get('to') ?? '';
+      const order = q.get('order');
+      const genre = q.get('genre') || null;
+      const platform = q.get('platform') || null;
+      if (!date.test(from) || !date.test(to) || (order !== 'best' && order !== 'popular')) throw new HttpError(400, 'Período u orden inválido');
+      if ((genre && !IGDB_GENRES[genre]) || (platform && !IGDB_PLATFORMS[platform])) throw new HttpError(400, 'Filtro desconocido');
+      const page = Math.min(Math.max(Number(q.get('page')) || 1, 1), 25);
+      return send(res, 200, await discoverGames({ from, to, order, genre, platform, page }));
     }
     case 'GET /api/games/index':
       await authenticate(req);

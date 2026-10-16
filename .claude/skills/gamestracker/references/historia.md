@@ -22,6 +22,8 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
 | #47 | Lo empezado en Trakt ("Continuar viendo") pasa solo a **Viendo ahora**. |
 | #48 | Búsqueda al instante con índice de ~10.000 juegos populares. |
 | #49 | (otra sesión) Arrastrar una fila ya no abre la carátula; Volver deja Explorar donde estaba. |
+| #50–#55 | Mis juegos con carátulas enteras, desenfoque gradual (GradualBlur), brillo en la carátula de la ficha (BorderGlow), ruedita que se frena en las filas, ícono de la lista en la carátula, ruleta en todas las listas. |
+| (este) | Lo mejor / más popular de períodos recientes (este año, año pasado, últimos 30 días, próximamente) desde **IGDB** vía `/api/games/discover`; crítica y jugadores **separados** en tarjetas, filas y ficha. |
 
 ## Decisiones tomadas (no re-discutir)
 
@@ -33,6 +35,11 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
 - **Idioma de títulos:** latino (`es-MX`). Nunca España.
 - **Búsqueda rápida:** por popularidad de RAWG (`-added`) en vez de "más de 1000 reseñas en Steam" (pedir Steam
   juego por juego no escala).
+- **Descubrir por período reciente:** IGDB (crítica = `aggregated_rating` con 3+ reseñas; popular = visitas de IGDB,
+  `popularity_primitives` tipo 1), cruzado a ids de RAWG por nombre y año. RAWG casi no tiene Metacritic de juegos
+  nuevos. Períodos viejos siguen con RAWG.
+- **Puntajes:** `metacritic` = crítica; `userScore`/`userLabel` = jugadores (RAWG o IGDB). Nunca mezclar los dos en un
+  mismo número.
 - **Trakt → Viendo ahora:** una vez por título; si Nico lo saca de la lista, no vuelve. Fecha de inicio = el día
   que se agrega.
 

@@ -54,6 +54,7 @@ Viendo ahora) · `/disconnect`.
 Datos externos (con sesión salvo IMDb/img): `GET /api/critics?name&year&steam` · `GET /api/length?name&year` ·
 `POST /api/covers {games:[{id,name,year}]}` (hasta 120, responde `{covers:{id:url|null}}`; los omitidos = no se
 pudo preguntar) · `GET /api/games/index` (gzip + ETag/304, `Cache-Control: private, max-age=14400`) ·
+`GET /api/games/discover?from&to&order=best|popular&genre&platform&page` (IGDB → ids de RAWG; 503 sin IGDB) ·
 `GET /api/rt?imdb=tt…` · `GET /api/imdb?id=tt…` (503 mientras baja el dataset) · `GET /api/img?url=` (proxy de
 imágenes de `media.rawg.io`, `image.tmdb.org`, `images.igdb.com` para canvas/colores).
 
