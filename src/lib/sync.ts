@@ -110,6 +110,12 @@ export async function register(username: string, password: string, invite?: stri
   void checkServer();
 }
 
+/** Renames the account; the session stays valid. */
+export async function renameAccount(username: string): Promise<void> {
+  const r = await api<{ user: { username: string } }>('POST', '/auth/username', { username });
+  useSync.setState({ username: r.user.username });
+}
+
 export async function changePassword(current: string, next: string): Promise<void> {
   const r = await api<{ token: string }>('POST', '/auth/password', { current, next });
   useSync.setState({ token: r.token });

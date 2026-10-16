@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Cloud, Download, ExternalLink, KeyRound, Loader2, LogIn, RefreshCw, Upload } from 'lucide-react';
-import { changePassword, syncNow } from '../lib/sync';
+import { changePassword, renameAccount, syncNow } from '../lib/sync';
 import { useSync } from '../store/useSync';
 import PublicProfileToggle from '../components/PublicProfileToggle';
 import FriendsSettings from '../components/FriendsSettings';
@@ -138,6 +138,8 @@ function SyncSection() {
   const { token, username, status, error, lastSyncAt, server, logout } = useSync();
   const toast = useToast((s) => s.show);
   const [changing, setChanging] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [busy, setBusy] = useState(false);
@@ -150,6 +152,19 @@ function SyncSection() {
       setChanging(false);
       setCurrent('');
       setNext('');
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveName = async () => {
+    setBusy(true);
+    try {
+      await renameAccount(newName);
+      toast('Nombre de usuario cambiado');
+      setRenaming(false);
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -188,6 +203,35 @@ function SyncSection() {
               Cambiar contraseña
             </button>
           </div>
+          <button
+            onClick={() => {
+              setRenaming(!renaming);
+              setNewName(username);
+            }}
+            className="mt-2 w-full rounded-2xl bg-surface-2 py-3 text-sm font-semibold"
+          >
+            Cambiar nombre de usuario
+          </button>
+          {renaming && (
+            <div className="mt-3 flex gap-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                aria-label="Nuevo nombre de usuario"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 rounded-2xl border border-line bg-surface-2 px-4 py-3 text-sm"
+              />
+              <button
+                onClick={saveName}
+                disabled={busy || !newName.trim() || newName.trim() === username}
+                className="rounded-2xl bg-white px-4 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                Guardar
+              </button>
+            </div>
+          )}
           {changing && (
             <div className="mt-3 space-y-2">
               <input
