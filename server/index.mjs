@@ -478,7 +478,7 @@ async function publicProfile(name, viewer = null) {
 // With "announce" (off by default) those friends also get a notification for each new rating.
 
 const SCREEN_ID = /^(tmdb|dscr):/;
-const TIER_EMOJI = { malo: '💀', aburrido: '😴', safa: '🤷', bueno: '👍', buenisimo: '🔥', historico: '👑' };
+const TIER_LABEL = { malo: 'Malo', aburrido: 'Aburrido', safa: 'Safa', bueno: 'Bueno', buenisimo: 'Buenísimo', historico: 'Histórico' };
 const MAX_FRIENDS = 200;
 const FEED_SIZE = 80;
 const ACTIVITY_KEEP = 100;
@@ -677,7 +677,7 @@ async function announce(user, events) {
         const brand = SCREEN_ID.test(e.game.id) ? 'MediaTracker' : 'GamesTracker';
         const payload = {
           title: brand,
-          body: `${user.username} le puso ${e.score} a ${e.game.name} ${TIER_EMOJI[e.tier] ?? ''}`.trim(),
+          body: `${user.username} le puso ${e.score} a ${e.game.name}${TIER_LABEL[e.tier] ? ` · ${TIER_LABEL[e.tier]}` : ''}`,
           url: `#/juego/${encodeURIComponent(e.game.id)}`,
           tag: `${user.username}:${e.game.id}`,
         };

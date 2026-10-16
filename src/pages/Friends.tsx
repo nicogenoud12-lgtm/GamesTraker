@@ -24,6 +24,7 @@ import { useStore } from '../store/useStore';
 import { useSync } from '../store/useSync';
 import { useToast } from '../store/useToast';
 import { useMode } from '../store/useUi';
+import TierIcon from '../components/TierIcon';
 
 /** Friends' ratings: who your friends are, what they rated lately and the notifications. */
 export default function Friends() {
@@ -310,8 +311,9 @@ function ActivityRow({ item, fresh = false }: { item: FeedItem; fresh?: boolean 
             <span className="font-semibold">{item.username}</span> le puso <span className="font-semibold">{item.score}</span> a{' '}
             <span className="font-semibold">{item.game.name}</span>
           </p>
-          <p className="text-xs text-muted">
-            {tier ? `${tier.emoji} ${tier.label} · ` : ''}
+          <p className="flex items-center gap-1 text-xs text-muted">
+            {tier && <TierIcon tier={tier.id} size={12} />}
+            {tier ? `${tier.label} · ` : ''}
             {timeAgo(item.at)}
             {mine != null && ` · vos le pusiste ${mine}`}
           </p>

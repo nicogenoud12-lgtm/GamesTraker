@@ -1,5 +1,6 @@
 import { TIER_BY_ID, scoreColor } from '../lib/tiers';
 import type { TierId } from '../lib/types';
+import TierIcon from './TierIcon';
 
 export function ScoreBadge({ score, className = '' }: { score: number; className?: string }) {
   const color = scoreColor(score);
@@ -20,7 +21,7 @@ export function TierChip({ tier, size = 'md' }: { tier: TierId; size?: 'sm' | 'm
       className={`inline-flex items-center gap-1 rounded-full font-semibold ${size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'}`}
       style={{ background: `${t.color}1f`, color: t.color }}
     >
-      <span>{t.emoji}</span>
+      <TierIcon tier={t.id} size={size === 'sm' ? 13 : 16} />
       {t.label}
     </span>
   );

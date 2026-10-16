@@ -8,6 +8,7 @@ import { daysBetween, localDay } from '../lib/format';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 import { celebrate } from '../lib/celebrate';
+import TierIcon from './TierIcon';
 
 interface Props {
   game: Game;
@@ -187,7 +188,7 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
                 color: active ? t.color : undefined,
               }}
             >
-              <span className="text-2xl">{t.emoji}</span>
+              <TierIcon tier={t.id} size={28} className={active ? '' : 'opacity-60 saturate-50'} />
               <span className="text-sm font-semibold">{t.label}</span>
             </button>
           );

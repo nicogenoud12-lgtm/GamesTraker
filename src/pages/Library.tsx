@@ -12,6 +12,7 @@ import type { Game, Rating, TierId } from '../lib/types';
 import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
 import { MODES, kindOf, modeOf } from '../lib/mode';
+import TierIcon from '../components/TierIcon';
 
 type Sort = 'score' | 'recent' | 'name';
 type View = 'escala' | 'grilla';
@@ -245,7 +246,7 @@ function Grid({ entries, sort, tier, byScore, set }: GridProps) {
           .reverse()
           .map((t) => (
             <Chip key={t.id} active={tier === t.id} color={t.color} onClick={() => set({ tier: tier === t.id ? null : t.id })}>
-              {t.emoji} {t.label}
+              <TierIcon tier={t.id} size={14} /> {t.label}
             </Chip>
           ))}
       </ScrollRow>
@@ -300,8 +301,8 @@ function Poster({ entry: { game, rating }, rank }: { entry: Entry; rank: number 
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
             <p className="line-clamp-2 text-sm leading-tight font-semibold">{game.name}</p>
-            <p className="mt-1 text-[11px] font-semibold" style={{ color: t.color }}>
-              {t.emoji} {t.label}
+            <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold" style={{ color: t.color }}>
+              <TierIcon tier={t.id} size={12} /> {t.label}
             </p>
           </div>
           <span
@@ -320,7 +321,7 @@ function Chip({ active, color, onClick, children }: { active: boolean; color?: s
   return (
     <button
       onClick={onClick}
-      className="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition"
+      className="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition"
       style={{
         borderColor: active ? (color ?? '#fff') : 'var(--color-line)',
         background: active ? `${color ?? '#ffffff'}22` : 'transparent',

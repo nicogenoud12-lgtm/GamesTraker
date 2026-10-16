@@ -13,6 +13,7 @@ import {
 } from './shareImage';
 import { TIERS, TIER_BY_ID } from './tiers';
 import type { Game, Rating } from './types';
+import { drawTierIcon } from './tierIcons';
 
 // The shareable images: one rating, the year in review and the whole tier list.
 
@@ -96,9 +97,10 @@ export async function ratingCard(game: Game, rating: Rating, mode: Mode): Promis
   ctx.fillText('/100', W / 2 - 40 + sw / 2 + 12, y);
   ctx.textAlign = 'center';
 
-  const label = `${tier.emoji}  ${tier.label}`;
   ctx.font = '700 50px "Space Grotesk"';
-  const lw = ctx.measureText(label).width + 90;
+  const iconSize = 54;
+  const tw = ctx.measureText(tier.label).width;
+  const lw = iconSize + 18 + tw + 90;
   y += 50;
   ctx.fillStyle = `${tier.color}2e`;
   roundRect(ctx, (W - lw) / 2, y, lw, 96, 48);
@@ -106,8 +108,12 @@ export async function ratingCard(game: Game, rating: Rating, mode: Mode): Promis
   ctx.strokeStyle = `${tier.color}88`;
   ctx.lineWidth = 3;
   ctx.stroke();
+  const lx = (W - lw) / 2 + 45;
+  drawTierIcon(ctx, tier.id, lx, y + (96 - iconSize) / 2, iconSize, tier.color);
   ctx.fillStyle = tier.color;
-  ctx.fillText(label, W / 2, y + 66);
+  ctx.textAlign = 'left';
+  ctx.fillText(tier.label, lx + iconSize + 18, y + 66);
+  ctx.textAlign = 'center';
 
   // The note, if any.
   if (rating.note.trim()) {
@@ -307,22 +313,25 @@ export async function tierCard(entries: TierEntry[], mode: Mode, title: string, 
     ctx.lineWidth = 2;
     ctx.stroke();
 
+    // Label column: a soft tint of the tier's color, its icon, name and count.
     const label = ctx.createLinearGradient(pad, y, pad + labelW, y + h);
-    label.addColorStop(0, tier.color);
-    label.addColorStop(1, `${tier.color}cc`);
+    label.addColorStop(0, `${tier.color}33`);
+    label.addColorStop(1, `${tier.color}0d`);
     ctx.fillStyle = label;
     roundRect(ctx, pad, y, labelW, h, 26);
     ctx.fill();
+    ctx.fillStyle = tier.color;
+    roundRect(ctx, pad, y + 18, 5, h - 36, 3);
+    ctx.fill();
     const cy = y + h / 2;
+    drawTierIcon(ctx, tier.id, pad + labelW / 2 - 28, cy - 64, 56, tier.color);
     ctx.textAlign = 'center';
-    ctx.font = '56px sans-serif';
-    ctx.fillText(tier.emoji, pad + labelW / 2, cy - 4);
-    ctx.fillStyle = '#0b0b10';
+    ctx.fillStyle = tier.color;
     ctx.font = '700 32px "Space Grotesk"';
-    ctx.fillText(tier.label, pad + labelW / 2, cy + 42);
-    ctx.font = '700 24px "Space Grotesk"';
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillText(String(items.length), pad + labelW / 2, cy + 74);
+    ctx.fillText(tier.label, pad + labelW / 2, cy + 30);
+    ctx.font = '600 24px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(String(items.length), pad + labelW / 2, cy + 62);
 
     items.forEach((e, i) => {
       const x = areaX + (i % cols) * (cw + gap);
