@@ -157,3 +157,23 @@ input[type='range'].score-range::-moz-range-thumb {
     animation: none !important;
   }
 }
+
+/*
+ * BorderGlow laid over a cover (game page): with no card background to hide it,
+ * the mesh-gradient border layer would tint the whole image. Keep it to the 1px
+ * ring, still inside the pointer's cone.
+ */
+.border-glow-card.cover-glow::before {
+  mask-image:
+    conic-gradient(
+      from var(--cursor-angle) at center,
+      black calc(var(--cone-spread) * 1%),
+      transparent calc((var(--cone-spread) + 15) * 1%),
+      transparent calc((100 - var(--cone-spread) - 15) * 1%),
+      black calc((100 - var(--cone-spread)) * 1%)
+    ),
+    linear-gradient(#000 0 0),
+    linear-gradient(#000 0 0);
+  mask-clip: border-box, padding-box, border-box;
+  mask-composite: intersect, exclude;
+}
