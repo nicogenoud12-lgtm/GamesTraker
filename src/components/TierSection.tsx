@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { TIERS, type Tier } from '../lib/tiers';
+import { TierBadge } from './TierIcon';
 
 /** "80–91": the default score range of a tier. */
 function range(tier: Tier): string {
@@ -18,7 +19,7 @@ interface Props {
 
 /**
  * One tier of the tier list: a dark card lightly tinted with the tier's color,
- * a header with its emoji, name, score range and count, and the covers below.
+ * a header with its icon, name, score range and count, and the covers below.
  */
 export default function TierSection({ tier, count, onOpen, children }: Props) {
   const empty = count === 0;
@@ -36,12 +37,7 @@ export default function TierSection({ tier, count, onOpen, children }: Props) {
         style={{ background: tier.color, boxShadow: `0 0 14px ${tier.color}aa` }}
       />
       <header className={`flex items-center gap-2.5 pr-3 pl-4 ${empty ? 'py-2.5' : 'pt-3 pb-2.5'}`}>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[17px] leading-none"
-          style={{ background: `${tier.color}24`, boxShadow: `inset 0 0 0 1px ${tier.color}45` }}
-        >
-          {tier.emoji}
-        </span>
+        <TierBadge tier={tier.id} size={34} />
         <div className="min-w-0 leading-tight">
           <h3 className="font-display text-[15px] font-bold tracking-tight" style={{ color: tier.color }}>
             {tier.label}

@@ -13,6 +13,7 @@ import { useStore } from '../store/useStore';
 import { useMode } from '../store/useUi';
 import { kindOf, modeOf } from '../lib/mode';
 import { MONTHS, topCounts, whenRated } from '../lib/stats';
+import TierIcon from '../components/TierIcon';
 
 interface Entry {
   game: Game;
@@ -244,10 +245,8 @@ export default function Stats() {
             .reverse()
             .map(({ tier, n }) => (
               <li key={tier.id} className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tier.color }} />
-                <span className="text-white/80">
-                  {tier.emoji} {tier.label}
-                </span>
+                <TierIcon tier={tier.id} size={16} />
+                <span className="text-white/80">{tier.label}</span>
                 <span className="ml-auto text-muted tabular-nums">{n}</span>
               </li>
             ))}

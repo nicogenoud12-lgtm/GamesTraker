@@ -6,6 +6,7 @@ import { Avatar } from '../pages/Friends';
 import { friendRatings, type FriendRating } from '../lib/social';
 import { TIER_BY_ID } from '../lib/tiers';
 import { useSync } from '../store/useSync';
+import TierIcon from './TierIcon';
 
 /** On a title's page: what each friend gave it (only friends who share their ratings). */
 export default function FriendsOnTitle({ gameId }: { gameId: string }) {
@@ -45,7 +46,11 @@ export default function FriendsOnTitle({ gameId }: { gameId: string }) {
               <Avatar name={r.username} size={28} />
               <span className="min-w-0 flex-1 truncate text-sm">
                 <span className="font-semibold">{r.username}</span>
-                {tier && <span className="text-muted"> · {tier.emoji} {tier.label}</span>}
+                {tier && (
+                  <span className="ml-1.5 inline-flex items-center gap-1 align-[-2px] text-muted">
+                    <TierIcon tier={tier.id} size={13} /> {tier.label}
+                  </span>
+                )}
               </span>
               <ScoreBadge score={r.score} />
             </li>

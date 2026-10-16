@@ -20,6 +20,7 @@ import { useIsDesktop } from '../lib/useMedia';
 import type { Game, Rating } from '../lib/types';
 import type { Tier } from '../lib/tiers';
 import { TIER_BY_ID } from '../lib/tiers';
+import TierIcon from '../components/TierIcon';
 
 export default function Home() {
   const games = useStore((s) => s.games);
@@ -400,10 +401,8 @@ function HomeDesktop({ games, rated, avg, legendary, playing, next, upNext, coun
                   .map(({ tier, n }) => (
                     <li key={tier.id}>
                       <Link to={`/mis-juegos?tier=${tier.id}`} className="flex items-center gap-2 hover:text-white">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: tier.color }} />
-                        <span className="text-white/80">
-                          {tier.emoji} {tier.label}
-                        </span>
+                        <TierIcon tier={tier.id} size={16} />
+                        <span className="text-white/80">{tier.label}</span>
                         <span className="ml-auto text-muted tabular-nums">{n}</span>
                       </Link>
                     </li>
@@ -479,8 +478,8 @@ function DesktopPoster({ game, rating, caption }: { game: Game; rating?: Rating;
       <p className="mt-2 truncate text-sm font-semibold group-hover:text-white">{game.name}</p>
       {caption && <p className="text-xs text-emerald-300">{caption}</p>}
       {tier && (
-        <p className="text-xs" style={{ color: tier.color }}>
-          {tier.emoji} {tier.label}
+        <p className="flex items-center gap-1 text-xs" style={{ color: tier.color }}>
+          <TierIcon tier={tier.id} size={12} /> {tier.label}
         </p>
       )}
     </Link>
