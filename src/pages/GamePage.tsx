@@ -14,7 +14,17 @@ import FriendsOnTitle from '../components/FriendsOnTitle';
 import { againLabel } from '../lib/diary';
 import { ratingCard } from '../lib/cards';
 import { slug } from '../lib/shareImage';
-import { type ImdbRating, type Scores, gameScores, imdbRating } from '../lib/critics';
+import {
+  type GameLength,
+  type ImdbRating,
+  type Scores,
+  type Tomatoes,
+  gameLength,
+  gameScores,
+  imdbRating,
+  tomatoScores,
+} from '../lib/critics';
+import { roughHours } from '../lib/durations';
 import { KIND_LABEL, MODES, kindOf, modeOf, statusLabel } from '../lib/mode';
 import { useUi } from '../store/useUi';
 import GameRail from '../components/GameRail';
@@ -117,6 +127,17 @@ export default function GamePage() {
       alive = false;
     };
   }, [isGame, detail?.id]);
+  // How long it takes, from HowLongToBeat (or IGDB); RAWG's average otherwise.
+  const [length, setLength] = useState<GameLength | null>(null);
+  useEffect(() => {
+    setLength(null);
+    if (!isGame || !detail) return;
+    let alive = true;
+    gameLength(detail.name, detail.released).then((l) => alive && setLength(l ?? null));
+    return () => {
+      alive = false;
+    };
+  }, [isGame, detail?.id]);
   const hasMetacritic = detail?.metacritic != null && !detail.scoreLabel;
   const critic = hasMetacritic ? null : scores?.critic;
   const steam = scores?.steam;
@@ -128,6 +149,17 @@ export default function GamePage() {
     if (!imdbId) return;
     let alive = true;
     imdbRating(imdbId).then((r) => alive && setImdb(r));
+    return () => {
+      alive = false;
+    };
+  }, [imdbId]);
+
+  const [tomatoes, setTomatoes] = useState<Tomatoes | null>(null);
+  useEffect(() => {
+    setTomatoes(null);
+    if (!imdbId) return;
+    let alive = true;
+    tomatoScores(imdbId).then((t) => alive && setTomatoes(t));
     return () => {
       alive = false;
     };
@@ -221,6 +253,12 @@ export default function GamePage() {
           {g}
         </span>
       ))}
+      {detail?.metacritic != null && !(steam && detail.scoreLabel === 'RAWG') && (
+        <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+          {detail.scoreLabel === 'RAWG' ? 'Usuarios RAWG' : (detail.scoreLabel ?? 'Metacritic')} {detail.metacritic}
+          {detail.scoreLabel === 'TMDB' && '%'}
+        </span>
+      )}
       {critic && (
         <a
           href={critic.url ?? undefined}
@@ -249,6 +287,28 @@ export default function GamePage() {
           IMDb {imdb.rating.toLocaleString('es-AR', { minimumFractionDigits: 1 })}
         </a>
       )}
+      {tomatoes?.critics != null && (
+        <a
+          href={tomatoes.url}
+          target="_blank"
+          rel="noreferrer"
+          title={`Tomatómetro de Rotten Tomatoes: críticos${tomatoes.criticReviews ? ` (${tomatoes.criticReviews.toLocaleString('es-AR')} reseñas)` : ''}`}
+          className="rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-semibold text-red-300"
+        >
+          RT críticos {tomatoes.critics}%
+        </a>
+      )}
+      {tomatoes?.audience != null && (
+        <a
+          href={tomatoes.url}
+          target="_blank"
+          rel="noreferrer"
+          title="Popcornmeter de Rotten Tomatoes: el público"
+          className="rounded-full bg-orange-400/15 px-2.5 py-1 text-xs font-semibold text-orange-300"
+        >
+          RT público {tomatoes.audience}%
+        </a>
+      )}
       {steam && (
         <a
           href={steam.url}
@@ -259,11 +319,6 @@ export default function GamePage() {
         >
           Steam {steam.rating}%
         </a>
-      )}
-      {detail?.metacritic != null && !(steam && detail.scoreLabel === 'RAWG') && (
-        <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-          {detail.scoreLabel === 'RAWG' ? 'Usuarios RAWG' : (detail.scoreLabel ?? 'Metacritic')} {detail.metacritic}
-        </span>
       )}
     </>
   );
@@ -409,9 +464,9 @@ export default function GamePage() {
     </section>
   );
 
-  const info = detail && (detail.playtime || detail.publishers.length > 0 || detail.website || (detail.facts?.length ?? 0) > 0) && (
+  const info = detail && (length || detail.playtime || detail.publishers.length > 0 || detail.website || (detail.facts?.length ?? 0) > 0) && (
     <dl className="mt-7 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
-      {detail.playtime && <Info label="Duración promedio" value={`${detail.playtime} h`} />}
+      {length ? <LengthInfo length={length} /> : detail.playtime ? <Info label="Duración promedio" value={`${detail.playtime} h`} /> : null}
       {detail.facts?.map((f) => <Info key={f.label} label={f.label} value={f.value} />)}
       {detail.publishers[0] && <Info label="Distribuye" value={detail.publishers[0]} />}
       {detail.released && <Info label="Lanzamiento" value={formatDate(detail.released)} />}
@@ -452,7 +507,13 @@ export default function GamePage() {
 
   const sheets = (
     <>
-      <RatingSheet game={game} open={rateOpen} onClose={() => setRateOpen(false)} avgHours={detail?.playtime} />
+      <RatingSheet
+        game={game}
+        open={rateOpen}
+        onClose={() => setRateOpen(false)}
+        avgHours={length?.hours ?? detail?.playtime}
+        avgSource={length ? LENGTH_SOURCE[length.source] : 'RAWG'}
+      />
       <ListPickerSheet game={game} open={listOpen} onClose={() => setListOpen(false)} />
       <AgainSheet game={game} open={againOpen} onClose={() => setAgainOpen(false)} />
       {rating && (
@@ -568,6 +629,34 @@ const REPLAY_LABEL = {
   games: { si: 'Lo volvería a jugar', quizas: 'Quizás lo vuelva a jugar', no: 'No lo volvería a jugar' },
   screen: { si: 'La volvería a ver', quizas: 'Quizás la vuelva a ver', no: 'No la volvería a ver' },
 } as const;
+
+const LENGTH_SOURCE: Record<GameLength['source'], string> = { hltb: 'HowLongToBeat', igdb: 'IGDB' };
+
+/** HowLongToBeat's way: to the half hour ("55,5 h"), whole hours from 100 on. */
+const halfHours = (h: number) => (h < 1 ? roughHours(h) : `${String(h >= 100 ? Math.round(h) : Math.round(h * 2) / 2).replace('.', ',')} h`);
+
+/** How long the game takes, with HowLongToBeat's breakdown by play style. */
+function LengthInfo({ length }: { length: GameLength }) {
+  const parts = [
+    length.main != null && `Historia ${halfHours(length.main)}`,
+    length.plus != null && `Con extras ${halfHours(length.plus)}`,
+    length.full != null && `Al 100% ${halfHours(length.full)}`,
+  ].filter(Boolean);
+  return (
+    <div className="col-span-2 rounded-2xl bg-surface px-4 py-3">
+      <dt className="flex items-center justify-between gap-2 text-xs text-muted">
+        Cuánto dura
+        {length.url && (
+          <a href={length.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-white">
+            {LENGTH_SOURCE[length.source]} <ExternalLink size={12} />
+          </a>
+        )}
+      </dt>
+      <dd className="mt-0.5 font-medium">{halfHours(length.hours)}</dd>
+      {parts.length > 1 && <dd className="mt-0.5 text-xs text-muted">{parts.join(' · ')}</dd>}
+    </div>
+  );
+}
 
 function Info({ label, value }: { label: string; value: string }) {
   return (

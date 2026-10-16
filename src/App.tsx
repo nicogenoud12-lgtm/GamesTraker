@@ -21,6 +21,8 @@ import Diary from './pages/Diary';
 import PublicProfile from './pages/PublicProfile';
 import Friends from './pages/Friends';
 import { startNotices } from './lib/social';
+import { refreshSavedTitles } from './lib/latam';
+import { useStore } from './store/useStore';
 import Account from './pages/Account';
 import ScrollToTop from './components/ScrollToTop';
 import CoverTransition from './components/CoverTransition';
@@ -28,6 +30,9 @@ import CoverTransition from './components/CoverTransition';
 export default function App() {
   useEffect(() => startSync(), []);
   useEffect(() => startNotices(), []);
+  // The TMDB key may arrive later, with the first sync on a new device.
+  const tmdbKey = useStore((s) => s.tmdbKey);
+  useEffect(() => void refreshSavedTitles(), [tmdbKey]);
   const mode = useMode();
   useEffect(() => {
     document.documentElement.dataset.mode = mode;

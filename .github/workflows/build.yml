@@ -46,6 +46,9 @@ jobs:
           curl -sf -H "Authorization: Bearer $AMIGO" 'localhost:8787/api/friends/ratings?id=rawg:1' | grep -q '"ratings"'
           curl -sf -H "Authorization: Bearer $AMIGO" localhost:8787/api/notifications | grep -q '"unread":0'
           curl -sf localhost:8787/api/push/key | grep -q '"key"'
+          # Duración y Rotten Tomatoes: solo con sesión, y el id de IMDb se valida.
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'localhost:8787/api/length?name=Hades')" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/rt?imdb=x')" = 400
           # Sin claves de Trakt en el servidor, la conexión con Nuvio aparece como no configurada.
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/trakt | grep -q '"enabled":false'
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST localhost:8787/api/trakt/connect)" = 503

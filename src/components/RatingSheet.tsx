@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import Sheet from './Sheet';
 import { TIERS, TIER_BY_ID, tierForScore } from '../lib/tiers';
+import { roughHours } from '../lib/durations';
 import { STREAMING, kindOf, statusOptions } from '../lib/mode';
 import type { Game, PlayStatus, Replay, TierId } from '../lib/types';
 import { daysBetween, localDay } from '../lib/format';
@@ -16,6 +17,8 @@ interface Props {
   onClose: () => void;
   /** RAWG's average playtime, shown next to the hours field. */
   avgHours?: number | null;
+  /** Where `avgHours` comes from ("HowLongToBeat", "IGDB", "RAWG"). */
+  avgSource?: string;
 }
 
 const REPLAY: { id: Replay; label: string }[] = [
@@ -32,7 +35,7 @@ function parseHours(text: string): number | null {
 
 const today = () => localDay();
 
-export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
+export default function RatingSheet({ game, open, onClose, avgHours, avgSource = 'RAWG' }: Props) {
   const existing = useStore((s) => s.ratings[game.id]);
   const startedOn = useStore((s) => s.starts[game.id]);
   const saveRating = useStore((s) => s.saveRating);
@@ -252,7 +255,7 @@ export default function RatingSheet({ game, open, onClose, avgHours }: Props) {
       </div>
       {!kind && avgHours ? (
         <p className="mt-1.5 text-right text-xs text-muted">
-          Promedio en RAWG: {avgHours} h
+          Promedio en {avgSource}: {roughHours(avgHours)}
           {hoursValue != null && hoursValue > 0 && (
             <span className="text-white/70"> · vos {hoursValue < avgHours ? 'más rápido' : hoursValue > avgHours ? 'más lento' : 'justo'}</span>
           )}

@@ -1,7 +1,8 @@
 // GamesTracker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
-// critic-score lookup (Steam's Metacritic, optionally IGDB), IMDb ratings
-// (from IMDb's daily public file), friends, notifications and Trakt (Nuvio).
+// critic-score lookup (Steam's Metacritic, optionally IGDB), game lengths
+// (HowLongToBeat, or IGDB), IMDb ratings (from IMDb's daily public file), Rotten
+// Tomatoes scores, friends, notifications and Trakt (Nuvio).
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -264,13 +265,13 @@ async function igdbToken(refresh = false) {
   return twitchToken.value;
 }
 
-async function igdbQuery(body, retry = true) {
-  const res = await fetch('https://api.igdb.com/v4/games', {
+async function igdbQuery(body, retry = true, endpoint = 'games') {
+  const res = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
     method: 'POST',
     headers: { 'Client-ID': IGDB_CLIENT_ID, Authorization: `Bearer ${await igdbToken(!retry)}`, 'Content-Type': 'text/plain' },
     body,
   });
-  if (res.status === 401 && retry) return igdbQuery(body, false);
+  if (res.status === 401 && retry) return igdbQuery(body, false, endpoint);
   if (!res.ok) throw new HttpError(502, `Error de IGDB (${res.status})`);
   return res.json();
 }
@@ -286,16 +287,19 @@ const simplify = (s) =>
 
 const yearOf = (unix) => (unix ? new Date(unix * 1000).getUTCFullYear() : null);
 
-/** Best IGDB match for a game name (and release year, to tell remakes apart). */
-function pickMatch(results, name, year) {
+/**
+ * Best match for a game name (and release year, to tell remakes apart). Results
+ * are IGDB's unless other ways to read their name and year are given.
+ */
+function pickMatch(results, name, year, nameOf = (g) => g.name, releasedIn = (g) => yearOf(g.first_release_date)) {
   const want = simplify(name);
-  const near = (g) => !year || !yearOf(g.first_release_date) || Math.abs(yearOf(g.first_release_date) - year) <= 1;
-  const exact = results.filter((g) => simplify(g.name) === want);
+  const near = (g) => !year || !releasedIn(g) || Math.abs(releasedIn(g) - year) <= 1;
+  const exact = results.filter((g) => simplify(nameOf(g)) === want);
   return (
     exact.find(near) ??
     exact[0] ??
     // Subtitles differ a lot between catalogs; only trust a partial match from the same year.
-    results.find((g) => near(g) && year && (simplify(g.name).startsWith(want) || want.startsWith(simplify(g.name))))
+    results.find((g) => near(g) && year && (simplify(nameOf(g)).startsWith(want) || want.startsWith(simplify(nameOf(g)))))
   );
 }
 
@@ -446,6 +450,191 @@ function imdbRating(tconst) {
     else hi = mid - 1;
   }
   return null;
+}
+
+// ---------- game lengths (HowLongToBeat, or IGDB) ----------
+// HowLongToBeat has no public API: its site searches with a token that an "init"
+// call hands out. The route has moved over time, so the current one is tried
+// first and the older one after. When HLTB is down or changes again, IGDB's
+// "time to beat" (if configured) stands in.
+
+const HLTB = process.env.HLTB_URL ?? 'https://howlongtobeat.com';
+const HLTB_ROUTES = ['/api/search/site', '/api/bleed'];
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const LENGTH_TTL = 14 * 864e5;
+let hltbSession = null;
+const lengths = new Map();
+
+async function hltbInit() {
+  for (const route of HLTB_ROUTES) {
+    const res = await fetch(`${HLTB}${route}/init?t=${Date.now()}`, {
+      headers: { 'User-Agent': BROWSER_UA, Accept: '*/*', Referer: 'https://howlongtobeat.com/' },
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    const json = res?.ok ? await res.json().catch(() => null) : null;
+    if (json?.token) {
+      hltbSession = { route, token: json.token, hpKey: json.hpKey ?? null, hpVal: json.hpVal ?? null, until: Date.now() + 30 * 60_000 };
+      return hltbSession;
+    }
+  }
+  throw new HttpError(502, 'HowLongToBeat no respondió');
+}
+
+async function hltbSearch(name, retry = true) {
+  const s = hltbSession && Date.now() < hltbSession.until ? hltbSession : await hltbInit();
+  const body = {
+    searchType: 'games',
+    searchTerms: String(name).trim().split(/\s+/).slice(0, 20),
+    searchPage: 1,
+    size: 20,
+    searchOptions: {
+      games: {
+        userId: 0,
+        platform: '',
+        sortCategory: 'popular',
+        rangeCategory: 'main',
+        rangeTime: { min: 0, max: 0 },
+        gameplay: { perspective: '', flow: '', genre: '', difficulty: '' },
+        rangeYear: { min: '', max: '' },
+        modifier: '',
+      },
+      users: { sortCategory: 'postcount' },
+      lists: { sortCategory: 'follows' },
+      filter: '',
+      sort: 0,
+      randomizer: 0,
+    },
+    useCache: true,
+  };
+  if (s.hpKey) body[s.hpKey] = s.hpVal;
+  const res = await fetch(`${HLTB}${s.route}`, {
+    method: 'POST',
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Content-Type': 'application/json',
+      Accept: '*/*',
+      Origin: 'https://howlongtobeat.com',
+      Referer: 'https://howlongtobeat.com/',
+      'x-auth-token': s.token,
+      ...(s.hpKey ? { 'x-hp-key': s.hpKey, 'x-hp-val': String(s.hpVal) } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+  // An expired token: get a new one, once.
+  if ([401, 403, 404].includes(res.status) && retry) {
+    hltbSession = null;
+    return hltbSearch(name, false);
+  }
+  if (!res.ok) throw new HttpError(502, `Error de HowLongToBeat (${res.status})`);
+  const json = await res.json();
+  if (!Array.isArray(json?.data)) throw new HttpError(502, 'HowLongToBeat respondió algo inesperado');
+  return json.data;
+}
+
+/** Seconds to hours, one decimal; 0 means "no data". */
+const toHours = (seconds) => (Number(seconds) > 0 ? Math.round(Number(seconds) / 360) / 10 : null);
+
+async function hltbLength(name, year) {
+  const g = pickMatch(await hltbSearch(name), name, year, (x) => x.game_name ?? '', (x) => Number(x.release_world) || null);
+  if (!g) return null;
+  const [main, plus, full, all] = [g.comp_main, g.comp_plus, g.comp_100, g.comp_all].map(toHours);
+  // The headline is HLTB's own: every play style together; else story + extras.
+  const hours = all ?? plus ?? main ?? full;
+  return hours ? { hours, main, plus, full, source: 'hltb', url: `https://howlongtobeat.com/game/${g.game_id}` } : null;
+}
+
+async function igdbLength(name, year) {
+  const q = String(name).replace(/["\\]/g, ' ').slice(0, 120);
+  const g = pickMatch(await igdbQuery(`search "${q}"; fields name,first_release_date,url; limit 20;`), name, year);
+  if (!g) return null;
+  const [t] = await igdbQuery(`fields hastily,normally,completely; where game_id = ${Number(g.id)};`, true, 'game_time_to_beats');
+  const [main, plus, full] = [t?.hastily, t?.normally, t?.completely].map(toHours);
+  const hours = plus ?? main ?? full;
+  return hours ? { hours, main, plus, full, source: 'igdb', url: g.url ?? null } : null;
+}
+
+async function gameLength(name, year) {
+  const key = `${simplify(name)}|${year ?? ''}`;
+  const hit = lengths.get(key);
+  if (hit && Date.now() - hit.at < (hit.value ? LENGTH_TTL : CRITIC_MISS_TTL)) return hit.value;
+  let failed = false;
+  const attempt = (fn) =>
+    fn().catch((e) => {
+      console.error(`length: ${e.message}`);
+      failed = true;
+      return null;
+    });
+  const value = (await attempt(() => hltbLength(name, year))) ?? (igdbEnabled() ? await attempt(() => igdbLength(name, year)) : null);
+  // A source that was down shouldn't hide the length for a whole day.
+  if (value || !failed) {
+    if (lengths.size > 5000) lengths.clear();
+    lengths.set(key, { at: Date.now(), value });
+  }
+  return value;
+}
+
+// ---------- Rotten Tomatoes ----------
+// Critics (Tomatometer) and audience (Popcornmeter) for movies and series. Wikidata
+// links each IMDb id to its Rotten Tomatoes page, whose scorecard is embedded as JSON.
+
+const WIKIDATA = process.env.WIKIDATA_URL ?? 'https://query.wikidata.org/sparql';
+const RT = process.env.RT_URL ?? 'https://www.rottentomatoes.com';
+const tomatoes = new Map();
+
+async function rtPath(imdbId) {
+  const query = `SELECT ?rt WHERE { ?item wdt:P345 "${imdbId}"; wdt:P1258 ?rt. } LIMIT 5`;
+  const res = await fetch(`${WIKIDATA}?${new URLSearchParams({ query, format: 'json' })}`, {
+    headers: { Accept: 'application/sparql-results+json', 'User-Agent': 'GamesTracker/1.0 (self-hosted personal app)' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new HttpError(502, `Error de Wikidata (${res.status})`);
+  const json = await res.json();
+  const paths = (json?.results?.bindings ?? []).map((b) => b?.rt?.value).filter((v) => /^(m|tv)\/[^\s/?#]+$/.test(v ?? ''));
+  return paths[0] ?? null;
+}
+
+const percent = (v) => {
+  const n = Number.parseFloat(String(v ?? ''));
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n) : null;
+};
+
+async function rtScores(imdbId) {
+  const page = await rtPath(imdbId);
+  if (!page) return null;
+  const res = await fetch(`${RT}/${page}`, {
+    headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9', Accept: 'text/html' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new HttpError(502, `Error de Rotten Tomatoes (${res.status})`);
+  const html = await res.text();
+  const card = /<script[^>]*id="media-scorecard-json"[^>]*>([\s\S]*?)<\/script>/.exec(html)?.[1];
+  if (!card) return null;
+  const data = JSON.parse(card);
+  const critics = percent(data?.criticsScore?.score);
+  const audience = percent(data?.audienceScore?.score);
+  if (critics == null && audience == null) return null;
+  return {
+    critics,
+    criticReviews: Number(data?.criticsScore?.reviewCount) || null,
+    audience,
+    url: `https://www.rottentomatoes.com/${page}`,
+  };
+}
+
+async function tomatoScores(imdbId) {
+  const hit = tomatoes.get(imdbId);
+  if (hit && Date.now() - hit.at < (hit.value ? CRITIC_TTL : CRITIC_MISS_TTL)) return hit.value;
+  const value = await rtScores(imdbId).catch((e) => {
+    // Down or changed: shown without it, and asked again next time.
+    console.error(`rotten tomatoes: ${e.message}`);
+    return undefined;
+  });
+  if (value === undefined) return null;
+  if (tomatoes.size > 5000) tomatoes.clear();
+  tomatoes.set(imdbId, { at: Date.now(), value });
+  return value;
 }
 
 // ---------- public profiles ----------
@@ -1157,6 +1346,19 @@ async function handle(req, res) {
       const year = Number(url.searchParams.get('year')) || null;
       const steam = url.searchParams.get('steam');
       return send(res, 200, await criticScore(name, year, steam && /^\d{1,10}$/.test(steam) ? steam : null));
+    }
+    case 'GET /api/length': {
+      // Signed-in only, like the critics: it spends the server's lookups.
+      await authenticate(req);
+      const name = url.searchParams.get('name')?.trim();
+      if (!name) throw new HttpError(400, 'Falta el nombre del juego');
+      return send(res, 200, { length: await gameLength(name.slice(0, 200), Number(url.searchParams.get('year')) || null) });
+    }
+    case 'GET /api/rt': {
+      await authenticate(req);
+      const id = url.searchParams.get('imdb') ?? '';
+      if (!/^tt\d{1,10}$/.test(id)) throw new HttpError(400, 'Falta el id de IMDb');
+      return send(res, 200, { scores: await tomatoScores(id) });
     }
     case 'GET /api/img':
       return proxyImage(res, url.searchParams.get('url'));

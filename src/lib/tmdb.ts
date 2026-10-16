@@ -6,7 +6,10 @@ import type { ScreenKind } from './mode';
 
 const API = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p';
-const LANG = 'es-AR';
+// Latin American Spanish: TMDB rarely has Argentine titles, and when a translation
+// for es-AR is missing it falls back to Spain's ("es"). Mexico's is the Latin
+// American one TMDB keeps for nearly everything. Streaming services stay Argentina's.
+const LANG = 'es-MX';
 const REGION = 'AR';
 
 export const MOVIE_GENRES: Record<number, string> = {
@@ -115,6 +118,11 @@ export async function tmdbList(
 ): Promise<{ games: Game[]; hasMore: boolean }> {
   const data = await get<Page>(key, path, { ...params, page: String(page) }, signal);
   return { games: data.results.map((r) => toItem(r, kind)), hasMore: data.page < Math.min(data.total_pages, 500) };
+}
+
+/** Just the name and poster of one title, in the app's language. */
+export async function tmdbItem(key: string, kind: ScreenKind, id: string): Promise<Game> {
+  return toItem(await get<TmdbItem>(key, `/${kind}/${id}`), kind);
 }
 
 export async function tmdbRecommendations(key: string, kind: ScreenKind, id: string, signal?: AbortSignal): Promise<Game[]> {
