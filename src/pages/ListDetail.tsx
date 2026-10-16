@@ -113,7 +113,7 @@ export default function ListDetail() {
             </p>
           </div>
         </div>
-        {ranked && items.length >= 2 && (
+        {items.length >= 2 && (
           <button
             onClick={() => setParams({ ruleta: '1' }, { replace: true })}
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 py-2.5 text-sm font-semibold text-accent"
@@ -122,15 +122,15 @@ export default function ListDetail() {
           </button>
         )}
       </header>
-      {ranked && (
-        <Roulette
-          open={rouletteOpen}
-          onClose={() => setParams({}, { replace: true })}
-          mode={listMode(list)}
-          games={items}
-          hours={hours}
-        />
-      )}
+      <Roulette
+        open={rouletteOpen}
+        onClose={() => setParams({}, { replace: true })}
+        mode={listMode(list)}
+        games={items}
+        hours={hours}
+        // Everything on "playing now" is already started; there the winner just opens.
+        canStart={list.id !== copy.nowListId}
+      />
 
       <div className="px-4">
         {items.length === 0 ? (
