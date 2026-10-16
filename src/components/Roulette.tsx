@@ -50,9 +50,11 @@ interface Props {
   mode: Mode;
   games: Game[];
   hours: Record<string, number | null>;
+  /** Offer moving the winner to "playing/watching now"; otherwise the button opens it. */
+  canStart?: boolean;
 }
 
-export default function Roulette({ open, onClose, mode, games, hours }: Props) {
+export default function Roulette({ open, onClose, mode, games, hours, canStart = true }: Props) {
   const copy = MODES[mode];
   const addToList = useStore((s) => s.addToList);
   const removeFromList = useStore((s) => s.removeFromList);
@@ -159,13 +161,23 @@ export default function Roulette({ open, onClose, mode, games, hours }: Props) {
         >
           <Dices size={18} /> {shown ? 'Otra vez' : 'Girar'}
         </button>
-        <button
-          onClick={start}
-          disabled={!shown || spinning}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent-2 py-3 font-semibold text-black disabled:opacity-40"
-        >
-          <Play size={18} /> {copy.start}
-        </button>
+        {canStart || !shown || spinning ? (
+          <button
+            onClick={start}
+            disabled={!shown || spinning || !canStart}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent-2 py-3 font-semibold text-black disabled:opacity-40"
+          >
+            <Play size={18} /> {canStart ? copy.start : 'Ver ficha'}
+          </button>
+        ) : (
+          <Link
+            to={`/juego/${encodeURIComponent(shown.id)}`}
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent-2 py-3 font-semibold text-black"
+          >
+            <Play size={18} /> Ver ficha
+          </Link>
+        )}
       </div>
     </Sheet>
   );
