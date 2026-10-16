@@ -46,6 +46,8 @@ export class RawgError extends Error {
 /** RAWG serves resized images when the path is prefixed with /resize/<w>/-/. */
 export function resizeImage(url: string | null, width: 420 | 640 | 1280): string | null {
   if (!url) return null;
+  // IGDB's box art: 528 px wide fits cards and the poster; 1080p for anything bigger.
+  if (url.includes('images.igdb.com/')) return url.replace(/\/t_[a-z0-9_]+\//, width > 640 ? '/t_1080p/' : '/t_cover_big_2x/');
   return url.replace('/media/games/', `/media/resize/${width}/-/games/`).replace(
     '/media/screenshots/',
     `/media/resize/${width}/-/screenshots/`,
@@ -72,6 +74,26 @@ function toGame(g: RawgGame): Game {
     platforms: (g.platforms ?? []).map((x) => x.platform.name),
     ...score(g),
   };
+}
+
+/**
+ * RAWG has some games twice ("Soulcalibur" and "Soulcalibur (1998)"): one per
+ * name and year is kept, the one with an image and the most ratings.
+ */
+function unique(results: RawgGame[]): RawgGame[] {
+  const keyOf = (g: RawgGame) =>
+    `${g.name
+      .replace(/\s*\((19|20)\d{2}\)\s*$/, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')}|${g.released?.slice(0, 4) ?? ''}`;
+  const better = (a: RawgGame, b: RawgGame) =>
+    Number(Boolean(a.background_image)) - Number(Boolean(b.background_image)) || (a.ratings_count ?? 0) - (b.ratings_count ?? 0);
+  const best = new Map<string, RawgGame>();
+  for (const g of results) {
+    const seen = best.get(keyOf(g));
+    if (!seen || better(g, seen) > 0) best.set(keyOf(g), g);
+  }
+  return results.filter((g) => best.get(keyOf(g)) === g);
 }
 
 // Discover rows are revisited often; keep responses for a while to save API calls.
@@ -105,7 +127,7 @@ export async function rawgSearch(key: string, query: string, signal?: AbortSigna
     { search: query, page_size: '25', search_precise: 'true' },
     signal,
   );
-  return data.results.map(toGame);
+  return unique(data.results).map(toGame);
 }
 
 export async function rawgPopular(key: string, signal?: AbortSignal): Promise<Game[]> {
@@ -119,7 +141,7 @@ export async function rawgPopular(key: string, signal?: AbortSignal): Promise<Ga
     { dates: `${iso(from)},${iso(today)}`, ordering: '-added', page_size: '20' },
     signal,
   );
-  return data.results.map(toGame);
+  return unique(data.results).map(toGame);
 }
 
 export async function rawgDetail(key: string, rawgId: string): Promise<GameDetail> {
@@ -161,13 +183,13 @@ export async function rawgDiscover(
   const params: Record<string, string> = { page: String(page), page_size: '20' };
   for (const [k, v] of Object.entries(query)) if (v) params[k] = v;
   const data = await get<{ results: RawgGame[]; next: string | null }>(key, '/games', params, signal);
-  return { games: data.results.map(toGame), hasMore: Boolean(data.next) };
+  return { games: unique(data.results).map(toGame), hasMore: Boolean(data.next) };
 }
 
 /** Other games of the same series (RAWG's game-series endpoint). */
 export async function rawgSeries(key: string, rawgId: string, signal?: AbortSignal): Promise<Game[]> {
   const data = await get<{ results: RawgGame[] }>(key, `/games/${rawgId}/game-series`, { page_size: '40' }, signal);
-  return data.results.map(toGame);
+  return unique(data.results).map(toGame);
 }
 
 /** What a rated game says about the player's taste: its tags, genres and studios. */
@@ -196,5 +218,5 @@ export interface Candidate {
 /** A page of games with the raw data recommendations rank them by. */
 export async function rawgCandidates(key: string, params: Record<string, string>, signal?: AbortSignal): Promise<Candidate[]> {
   const data = await get<{ results: RawgGame[] }>(key, '/games', { page_size: '40', ...params }, signal);
-  return data.results.map((g) => ({ game: toGame(g), tags: g.tags ?? [], rating: g.rating ?? 0, ratingsCount: g.ratings_count ?? 0 }));
+  return unique(data.results).map((g) => ({ game: toGame(g), tags: g.tags ?? [], rating: g.rating ?? 0, ratingsCount: g.ratings_count ?? 0 }));
 }

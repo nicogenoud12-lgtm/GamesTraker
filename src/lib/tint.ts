@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
 import { coverUrl, loadImage } from './shareImage';
+import { useGameCover } from './covers';
 import type { Game } from './types';
 
 // The detail page takes on the cover's color. The cover is fetched through our
 // server (/api/img) so its pixels can be read, shrunk to a few pixels and the
 // most vivid, common color picked. Results are cached per title.
 
-const KEY = 'gamestraker-tints';
+// "-2": games' colors now come from IGDB's box art instead of RAWG's image.
+const KEY = 'gamestraker-tints-2';
 const MAX = 400;
 
 type Cache = Record<string, string>;
+
+try {
+  localStorage.removeItem('gamestraker-tints');
+} catch {
+  // Storage blocked: nothing to clean up.
+}
 
 function readCache(): Cache {
   try {
@@ -123,18 +131,18 @@ export function coverTint(game: Pick<Game, 'id' | 'cover' | 'name'>): Promise<st
 }
 
 /** The cover's color as a CSS color, or null while it's not known. */
-export function useCoverTint(game: Pick<Game, 'id' | 'cover' | 'name'> | null): string | null {
+export function useCoverTint(game: Pick<Game, 'id' | 'cover' | 'name' | 'released'> | null): string | null {
   const id = game?.id;
-  const cover = game?.cover;
+  const { cover, waiting } = useGameCover(game ?? { name: '', cover: null });
   const [tint, setTint] = useState<string | null>(() => (id ? (readCache()[id] ?? null) : null));
   useEffect(() => {
-    if (!id) return;
+    if (!id || waiting) return;
     let alive = true;
     setTint(readCache()[id] ?? null);
     coverTint({ id, cover: cover ?? null, name: '' }).then((c) => alive && c && setTint(c));
     return () => {
       alive = false;
     };
-  }, [id, cover]);
+  }, [id, cover, waiting]);
   return tint;
 }
