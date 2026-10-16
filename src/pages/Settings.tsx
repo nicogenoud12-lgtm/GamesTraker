@@ -12,6 +12,7 @@ import { useMode } from '../store/useUi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 import TraktSettings from '../components/TraktSettings';
+import PlayniteSettings from '../components/PlayniteSettings';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -55,6 +56,7 @@ export default function Settings() {
         <SyncSection />
         {loggedIn && <FriendsSettings />}
         {loggedIn && <TraktSettings />}
+        {loggedIn && <PlayniteSettings />}
 
         {/* The section of the mode in use goes first. */}
         {(mode === 'games' ? ['rawg', 'tmdb'] : ['tmdb', 'rawg']).map((k) =>

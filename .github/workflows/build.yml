@@ -58,6 +58,14 @@ jobs:
           curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
             -d '{"games":[{"id":"rawg:1","name":"Hades","year":2020}]}' localhost:8787/api/covers | grep -q '"covers":{}'
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/rt?imdb=x')" = 400
+          # Playnite: la extensión trae la clave de la cuenta; sin ella (o con otra) no entra.
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8787/api/playnite)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Playnite-Key: 0123abcd.x' -H 'Content-Type: application/json' -d '{}' localhost:8787/api/playnite/report)" = 401
+          PKEY=$(curl -sf -H "Authorization: Bearer $TOKEN" -X POST localhost:8787/api/playnite/connect | jq -r .key)
+          curl -sf -H "Authorization: Bearer $TOKEN" 'localhost:8787/api/playnite/extension?origin=https://ejemplo.com' | head -c 2 | grep -q PK
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Playnite-Key: $PKEY" -H 'Content-Type: application/json' \
+            -d '{"event":"started","games":[{"name":"Hades","playtime":60}]}' localhost:8787/api/playnite/report)" = 202
+          curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/playnite | grep -q '"connected":true'
           # Sin claves de Trakt en el servidor, la conexión con Nuvio aparece como no configurada.
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/trakt | grep -q '"enabled":false'
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST localhost:8787/api/trakt/connect)" = 503

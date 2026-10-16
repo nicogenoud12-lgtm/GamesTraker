@@ -3,6 +3,7 @@ import { api } from './sync';
 import type { Game, TierId } from './types';
 import { useSync } from '../store/useSync';
 import { refreshTrakt } from './trakt';
+import { refreshPlaynite } from './playnite';
 
 // Friends: each account has an invite link; friends see each other's ratings
 // (unless hidden) and, if the author turned it on, get notified of new ones.
@@ -87,6 +88,7 @@ export function startNotices(): () => void {
   const refresh = () => {
     void refreshNotices();
     void refreshTrakt();
+    void refreshPlaynite();
   };
   refresh();
   const onVisible = () => document.visibilityState === 'visible' && refresh();

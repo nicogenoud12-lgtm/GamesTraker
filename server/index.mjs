@@ -2,7 +2,7 @@
 // document per user with their ratings, lists and game snapshots, plus a
 // critic-score lookup (Steam's Metacritic, optionally IGDB), game covers and lengths
 // (HowLongToBeat, or IGDB), IMDb ratings (from IMDb's daily public file), Rotten
-// Tomatoes scores, friends, notifications and Trakt (Nuvio).
+// Tomatoes scores, friends, notifications, Trakt (Nuvio) and Playnite.
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -1647,6 +1647,274 @@ async function traktCheckAll() {
   }
 }
 
+// ---------- Playnite ----------
+// Playnite (the PC game launcher) has no cloud: a small extension the app hands
+// out reports, with a per-account key, when a game starts or stops and, when
+// Playnite opens, every game that was played with its hours and status. Games
+// started go to "Jugando ahora" and the ones marked beaten or completed ask to
+// be rated, like Trakt does for series and movies.
+
+const PLAYNITE_DIR = path.join(DATA_DIR, 'playnite');
+const playniteFile = (uid) => path.join(PLAYNITE_DIR, `${uid}.json`);
+const savePlaynite = (uid, data) => serial(() => writeJson(playniteFile(uid), data));
+
+// Playnite's completion statuses can be renamed and come in the user's language.
+const PLAYING = /playing|jugando/i;
+const FINISHED = /beaten|superado|terminado|completed|completado|100/i;
+const COMPLETED = /completed|completado|100/i;
+const ABANDONED = /abandon/i;
+const RECENT_MS = 30 * 864e5;
+
+/** The key goes in the extension: "<user id>.<secret>", so the file is found without a lookup table. */
+async function playniteConnect(user) {
+  const p = (await readJson(playniteFile(user.id), null)) ?? {};
+  const key = p.key ?? `${user.id}.${randomBytes(24).toString('base64url')}`;
+  await savePlaynite(user.id, { ...p, key, connectedAt: p.connectedAt ?? new Date().toISOString() });
+  return { key };
+}
+
+async function playniteUser(req) {
+  const key = String(req.headers['x-playnite-key'] ?? '');
+  const uid = /^([a-f0-9]{8,32})\./.exec(key)?.[1];
+  const p = uid ? await readJson(playniteFile(uid), null) : null;
+  if (!p?.key || p.key.length !== key.length || !timingSafeEqual(Buffer.from(p.key), Buffer.from(key))) {
+    throw new HttpError(401, 'Clave de Playnite inválida');
+  }
+  return uid;
+}
+
+/** What the extension sends, trimmed to what's used. */
+function playniteGames(body) {
+  return (Array.isArray(body?.games) ? body.games : [])
+    .slice(0, 3000)
+    .map((g) => ({
+      name: str(g?.name, 200),
+      year: Number(g?.year) || null,
+      playtime: Math.max(0, Number(g?.playtime) || 0),
+      lastActivity: Date.parse(g?.lastActivity) || null,
+      status: str(g?.status, 60) ?? '',
+    }))
+    .filter((g) => g.name);
+}
+
+let playniteQueue = Promise.resolve();
+
+/** Matches the reported games to RAWG and queues what changed; runs after answering the extension. */
+async function playniteReport(uid, event, games) {
+  const p = await readJson(playniteFile(uid), null);
+  if (!p) return;
+  const ratings = (await readData(uid)).ratings ?? {};
+  const known = p.games ?? {};
+  const done = new Set(p.done ?? []);
+  const added = new Set(p.playingAdded ?? []);
+  const pending = p.pending ?? [];
+  const playing = p.playing ?? [];
+  const fresh = [];
+  // Opening Playnite reports the whole played library: the most recent first, and only so many lookups per run.
+  const list = [...games].sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0)).slice(0, 400);
+  for (const g of list) {
+    const rawg = await rawgMatch(g.name, g.year).catch(() => null);
+    if (!rawg) continue;
+    const id = `rawg:${rawg.id}`;
+    const before = known[id];
+    const startedNow = event === 'started';
+    // Statuses from long ago (the first report brings the whole library) don't count, only recent play.
+    const recent = startedNow || event === 'stopped' || (g.lastActivity != null && Date.now() - g.lastActivity < RECENT_MS);
+    const isPlaying = startedNow || (recent && PLAYING.test(g.status));
+    known[id] = {
+      name: rawg.name,
+      year: rawg.released ? Number(rawg.released.slice(0, 4)) : g.year,
+      hours: Math.round((g.playtime / 3600) * 10) / 10,
+      lastActivity: g.lastActivity,
+      status: g.status,
+      // The first time it's seen being played: the day it went into "Jugando ahora".
+      startedAt: before?.startedAt ?? (isPlaying ? (startedNow ? Date.now() : (g.lastActivity ?? Date.now())) : null),
+    };
+    if (ratings[id]) continue;
+    if (isPlaying && !added.has(id) && !playing.some((x) => x.id === id) && !ABANDONED.test(g.status)) {
+      playing.unshift({ key: id, id, title: rawg.name, year: known[id].year, at: known[id].startedAt ?? Date.now() });
+    }
+    // Newly marked beaten or completed in Playnite: ask for a score once.
+    if (FINISHED.test(g.status) && (before ? !FINISHED.test(before.status) : recent) && !done.has(id)) {
+      done.add(id);
+      const item = {
+        key: id,
+        id,
+        kind: 'game',
+        title: rawg.name,
+        year: known[id].year,
+        at: g.lastActivity ?? Date.now(),
+        hours: known[id].hours || null,
+        status: COMPLETED.test(g.status) ? 'completado' : 'terminado',
+      };
+      pending.unshift(item);
+      fresh.push(item);
+    }
+  }
+  await savePlaynite(uid, {
+    ...p,
+    games: known,
+    pending: pending.slice(0, 50),
+    playing: playing.slice(0, 50),
+    done: [...done].slice(-1000),
+    lastReportAt: new Date().toISOString(),
+    lastEvent: event,
+  });
+  await pushTo(
+    uid,
+    fresh.map((f) => ({
+      title: 'GamesTracker',
+      body: `Terminaste ${f.title}${f.hours ? ` en ${f.hours} h` : ''}. ¿Cuánto le das?`,
+      url: `#/juego/${encodeURIComponent(f.id)}?puntuar=1`,
+      tag: `rate:${f.id}`,
+    })),
+  );
+}
+
+async function playniteStatus(user) {
+  const p = await readJson(playniteFile(user.id), null);
+  if (!p?.key) return { connected: false, pending: [], playing: [], hours: {} };
+  const ratings = (await readData(user.id)).ratings ?? {};
+  const added = new Set(p.playingAdded ?? []);
+  const hours = {};
+  for (const [id, g] of Object.entries(p.games ?? {})) if (g.hours > 0) hours[id] = g.hours;
+  return {
+    connected: true,
+    // Before the extension's first report it isn't working yet.
+    lastReportAt: p.lastReportAt ?? null,
+    games: Object.keys(p.games ?? {}).length,
+    pending: (p.pending ?? []).filter((x) => !ratings[x.id]),
+    playing: (p.playing ?? []).filter((x) => !added.has(x.id) && !ratings[x.id]),
+    hours,
+  };
+}
+
+async function playnitePlayingAdded(user, ids) {
+  if (!Array.isArray(ids)) throw new HttpError(400, 'Formato inválido');
+  const p = await readJson(playniteFile(user.id), null);
+  if (!p) return { ok: true };
+  const added = new Set(p.playingAdded ?? []);
+  for (const id of ids.slice(0, 100)) if (typeof id === 'string' && /^rawg:\d+$/.test(id)) added.add(id);
+  await savePlaynite(user.id, { ...p, playingAdded: [...added].slice(-2000), playing: (p.playing ?? []).filter((x) => !added.has(x.id)) });
+  return { ok: true };
+}
+
+async function playniteDismiss(user, key) {
+  const p = await readJson(playniteFile(user.id), null);
+  if (p) await savePlaynite(user.id, { ...p, pending: (p.pending ?? []).filter((x) => x.key !== key) });
+  return { ok: true };
+}
+
+async function playniteDisconnect(user) {
+  await serial(() => unlink(playniteFile(user.id)).catch(() => {}));
+  return { ok: true };
+}
+
+// The extension, as a .pext (a zip Playnite installs with a double click), with this
+// account's key and the app's address already in it.
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** A zip with its files stored as-is (no compression needed for two small text files). */
+function zipStore(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, text] of files) {
+    const data = Buffer.from(text, 'utf8');
+    const fileName = Buffer.from(name, 'utf8');
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(fileName.length, 26);
+    locals.push(local, fileName, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(fileName.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, fileName);
+    offset += 30 + fileName.length + data.length;
+  }
+  const dir = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(dir.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, dir, end]);
+}
+
+const psString = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+async function playniteExtension(user, origin) {
+  const { key } = await playniteConnect(user);
+  const manifest = ['Id: GamesTracker_Playnite', 'Name: GamesTracker', 'Author: GamesTracker', 'Version: 1.0', 'Module: GamesTracker.psm1', 'Type: Script', ''].join('\r\n');
+  const script = `# GamesTracker: tells the app when a game starts or stops and, when Playnite opens,
+# which games were played, for how long and their completion status.
+$script:Url = ${psString(origin)}
+$script:Key = ${psString(key)}
+
+function Get-GamesTrackerGame($game) {
+    $status = $null
+    if ($game.CompletionStatus) { $status = $game.CompletionStatus.Name }
+    $year = $null
+    if ($game.ReleaseDate) { $year = $game.ReleaseDate.Year }
+    $last = $null
+    if ($game.LastActivity) { $last = $game.LastActivity.ToUniversalTime().ToString('o') }
+    @{ name = $game.Name; year = $year; playtime = [int64]$game.Playtime; lastActivity = $last; status = $status }
+}
+
+function Send-GamesTrackerReport($event, $games) {
+    try {
+        $body = @{ event = $event; games = @($games) } | ConvertTo-Json -Depth 4 -Compress
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+        Invoke-RestMethod -Uri "$($script:Url)/api/playnite/report" -Method Post -Headers @{ 'X-Playnite-Key' = $script:Key } -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 15 | Out-Null
+    } catch {
+        $__logger.Warn("GamesTracker: $($_.Exception.Message)")
+    }
+}
+
+function OnApplicationStarted() {
+    $played = @($PlayniteApi.Database.Games | Where-Object { $_.Playtime -gt 0 -or $_.LastActivity })
+    Send-GamesTrackerReport 'library' @($played | ForEach-Object { Get-GamesTrackerGame $_ })
+}
+
+function OnGameStarted() {
+    param($evnArgs)
+    Send-GamesTrackerReport 'started' @(Get-GamesTrackerGame $evnArgs.Game)
+}
+
+function OnGameStopped() {
+    param($evnArgs)
+    Send-GamesTrackerReport 'stopped' @(Get-GamesTrackerGame $evnArgs.Game)
+}
+`.replace(/\n/g, '\r\n');
+  return zipStore([
+    ['extension.yaml', manifest],
+    ['GamesTracker.psm1', script],
+  ]);
+}
+
 // ---------- covers for share images ----------
 // A canvas can only be exported if its images come from our own origin, so
 // covers for the share images are fetched through here. Only these hosts.
@@ -1812,6 +2080,32 @@ async function handle(req, res) {
       return send(res, 200, await subscribePush(await authenticate(req), await readBody(req)));
     case 'POST /api/push/unsubscribe':
       return send(res, 200, await unsubscribePush(await authenticate(req), (await readBody(req)).endpoint));
+    case 'POST /api/playnite/report': {
+      // From the Playnite extension, with its key instead of a session. Answered at once so Playnite doesn't wait.
+      const uid = await playniteUser(req);
+      const body = await readBody(req);
+      const event = ['library', 'started', 'stopped'].includes(body?.event) ? body.event : 'library';
+      const games = playniteGames(body);
+      playniteQueue = playniteQueue.then(() => playniteReport(uid, event, games)).catch((e) => console.error(`playnite: ${e.message}`));
+      return send(res, 202, { ok: true });
+    }
+    case 'GET /api/playnite':
+      return send(res, 200, await playniteStatus(await authenticate(req)));
+    case 'POST /api/playnite/connect':
+      return send(res, 200, await playniteConnect(await authenticate(req)));
+    case 'GET /api/playnite/extension': {
+      const user = await authenticate(req);
+      const origin = url.searchParams.get('origin') ?? '';
+      if (!/^https?:\/\/[a-z0-9.-]+(:\d{1,5})?$/i.test(origin)) throw new HttpError(400, 'Dirección inválida');
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="GamesTracker.pext"' });
+      return res.end(await playniteExtension(user, origin));
+    }
+    case 'POST /api/playnite/playing':
+      return send(res, 200, await playnitePlayingAdded(await authenticate(req), (await readBody(req)).ids));
+    case 'POST /api/playnite/dismiss':
+      return send(res, 200, await playniteDismiss(await authenticate(req), (await readBody(req)).key));
+    case 'POST /api/playnite/disconnect':
+      return send(res, 200, await playniteDisconnect(await authenticate(req)));
     case 'GET /api/trakt':
       return send(res, 200, await traktStatus(await authenticate(req)));
     case 'POST /api/trakt/connect':
@@ -1901,6 +2195,7 @@ await mkdir(BACKUP_DIR, { recursive: true });
 await mkdir(ACTIVITY_DIR, { recursive: true });
 await mkdir(PUSH_DIR, { recursive: true });
 await mkdir(TRAKT_DIR, { recursive: true });
+await mkdir(PLAYNITE_DIR, { recursive: true });
 await loadSecret();
 await loadVapid();
 

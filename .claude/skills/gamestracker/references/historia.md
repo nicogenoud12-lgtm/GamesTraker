@@ -45,6 +45,10 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
 - **Caché de notas:** en el navegador (`gamestraker-scores`, no se sincroniza), por id de título. La ficha muestra lo
   guardado al instante y revalida; cada sitio que responde reemplaza lo suyo, el que falla deja lo guardado. Precarga en
   segundo plano de los juegos puntuados o en listas (40 por visita, 1 cada 1,5 s, vencen a los 14 días).
+- **Playnite:** extensión PowerShell (`Type: Script`) que la app arma como `.pext` con la clave adentro. Al abrir
+  Playnite manda los juegos jugados; en cada arranque/cierre, ese juego. Arrancado → Jugando ahora (una vez, con la
+  fecha); marcado Superado/Completado → aviso para puntuar con horas, estado y fecha. En la primera sincronización solo
+  cuenta lo jugado en los últimos 30 días (si no, avisaría por todo lo viejo).
 - **Trakt → Viendo ahora:** una vez por título; si Nico lo saca de la lista, no vuelve. Fecha de inicio = el día
   que se agrega.
 
