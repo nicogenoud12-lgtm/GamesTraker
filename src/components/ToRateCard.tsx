@@ -1,11 +1,15 @@
 import { Link } from 'react-router-dom';
 import { Film, Star, Tv, X } from 'lucide-react';
-import { dismissToRate, useTrakt } from '../lib/trakt';
+import { dismissToRate, useTrakt, type ToRate } from '../lib/trakt';
 import { useStore } from '../store/useStore';
+
+// A selector must return the same value when nothing changed: a fresh `[]` on every
+// read makes React re-render forever (error #185), so the empty case is one shared array.
+const NONE: ToRate[] = [];
 
 /** "Terminaste esto en Nuvio, ¿lo puntuás?" — what Trakt saw finished and isn't rated yet. */
 export default function ToRateCard({ className = '' }: { className?: string }) {
-  const pending = useTrakt((s) => s.status?.pending ?? []);
+  const pending = useTrakt((s) => s.status?.pending ?? NONE);
   const ratings = useStore((s) => s.ratings);
   const items = pending.filter((p) => !ratings[p.id]);
   if (!items.length) return null;
