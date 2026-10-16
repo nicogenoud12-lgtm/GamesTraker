@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api } from './sync';
 import type { Game, TierId } from './types';
 import { useSync } from '../store/useSync';
+import { refreshTrakt } from './trakt';
 
 // Friends: each account has an invite link; friends see each other's ratings
 // (unless hidden) and, if the author turned it on, get notified of new ones.
@@ -83,11 +84,15 @@ export async function markNoticesSeen(): Promise<void> {
 
 /** Keeps the unread count fresh: now, when the app comes back to the front and every few minutes. */
 export function startNotices(): () => void {
-  void refreshNotices();
-  const onVisible = () => document.visibilityState === 'visible' && void refreshNotices();
+  const refresh = () => {
+    void refreshNotices();
+    void refreshTrakt();
+  };
+  refresh();
+  const onVisible = () => document.visibilityState === 'visible' && refresh();
   document.addEventListener('visibilitychange', onVisible);
-  const timer = setInterval(() => document.visibilityState === 'visible' && void refreshNotices(), 3 * 60_000);
-  const unsub = useSync.subscribe((s, prev) => s.token !== prev.token && void refreshNotices());
+  const timer = setInterval(() => document.visibilityState === 'visible' && refresh(), 3 * 60_000);
+  const unsub = useSync.subscribe((s, prev) => s.token !== prev.token && refresh());
   return () => {
     document.removeEventListener('visibilitychange', onVisible);
     clearInterval(timer);

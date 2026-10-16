@@ -1,7 +1,7 @@
 // GamesTracker sync API: user accounts (username + password) and one JSON
 // document per user with their ratings, lists and game snapshots, plus a
-// critic-score lookup (Steam's Metacritic, optionally IGDB) and IMDb ratings
-// (from IMDb's daily public file) that browsers can't do themselves.
+// critic-score lookup (Steam's Metacritic, optionally IGDB), IMDb ratings
+// (from IMDb's daily public file), friends, notifications and Trakt (Nuvio).
 // No dependencies; everything lives under DATA_DIR.
 //
 // CLI (inside the container):
@@ -693,28 +693,34 @@ async function announce(user, events) {
   for (const f of await friendsOf(user)) {
     // Only the friends this person shares with hear about it.
     if (!canSee(f, user)) continue;
-    const subs = await readJson(pushFile(f.id), []);
-    if (!subs.length) continue;
-    const gone = new Set();
-    for (const sub of subs) {
-      for (const e of events) {
-        const brand = SCREEN_ID.test(e.game.id) ? 'MediaTracker' : 'GamesTracker';
-        const payload = {
-          title: brand,
-          body: `${user.username} le puso ${e.score} a ${e.game.name}${TIER_LABEL[e.tier] ? ` · ${TIER_LABEL[e.tier]}` : ''}`,
-          url: `#/juego/${encodeURIComponent(e.game.id)}`,
-          tag: `${user.username}:${e.game.id}`,
-        };
-        const subject = /^https:\/\//.test(sub.origin ?? '') ? sub.origin : 'mailto:gamestracker@example.com';
-        if ((await sendPush(sub, payload, vapid, subject)) === 'gone') gone.add(sub.endpoint);
-      }
+    await pushTo(
+      f.id,
+      events.map((e) => ({
+        title: SCREEN_ID.test(e.game.id) ? 'MediaTracker' : 'GamesTracker',
+        body: `${user.username} le puso ${e.score} a ${e.game.name}${TIER_LABEL[e.tier] ? ` · ${TIER_LABEL[e.tier]}` : ''}`,
+        url: `#/juego/${encodeURIComponent(e.game.id)}`,
+        tag: `${user.username}:${e.game.id}`,
+      })),
+    );
+  }
+}
+
+/** Sends notifications to every device of one account, forgetting the ones that expired. */
+async function pushTo(uid, payloads) {
+  const subs = await readJson(pushFile(uid), []);
+  if (!subs.length || !payloads.length) return;
+  const gone = new Set();
+  for (const sub of subs) {
+    const subject = /^https:\/\//.test(sub.origin ?? '') ? sub.origin : 'mailto:gamestracker@example.com';
+    for (const payload of payloads) {
+      if ((await sendPush(sub, payload, vapid, subject)) === 'gone') gone.add(sub.endpoint);
     }
-    if (gone.size) {
-      await serial(async () => {
-        const now = await readJson(pushFile(f.id), []);
-        await writeJson(pushFile(f.id), now.filter((s) => !gone.has(s.endpoint)));
-      });
-    }
+  }
+  if (gone.size) {
+    await serial(async () => {
+      const now = await readJson(pushFile(uid), []);
+      await writeJson(pushFile(uid), now.filter((s) => !gone.has(s.endpoint)));
+    });
   }
 }
 
@@ -763,6 +769,202 @@ async function unsubscribePush(user, endpoint) {
     await writeJson(pushFile(user.id), subs.filter((s) => s.endpoint !== endpoint));
   });
   return { ok: true };
+}
+
+// ---------- Trakt (what was watched in Nuvio) ----------
+// Nuvio scrobbles to Trakt. With a Trakt app's keys on the server, each account can
+// connect its Trakt with a code (device flow). Every few minutes the server reads the
+// new history and, when a movie was watched or a series' last aired episode was seen,
+// leaves it "to rate" and sends a notification to that person's devices.
+
+const TRAKT_ID = process.env.TRAKT_CLIENT_ID ?? '';
+const TRAKT_SECRET = process.env.TRAKT_CLIENT_SECRET ?? '';
+const TRAKT_API = process.env.TRAKT_API_URL ?? 'https://api.trakt.tv';
+const TRAKT_POLL_MS = Math.max(2, Number(process.env.TRAKT_POLL_MINUTES) || 10) * 60_000;
+const TRAKT_DIR = path.join(DATA_DIR, 'trakt');
+const traktEnabled = () => Boolean(TRAKT_ID && TRAKT_SECRET);
+const traktFile = (uid) => path.join(TRAKT_DIR, `${uid}.json`);
+/** Device codes waiting for the person to approve them on trakt.tv/activate. */
+const traktDevices = new Map();
+
+function traktFetch(method, p, { token, body } = {}) {
+  return fetch(`${TRAKT_API}${p}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'trakt-api-version': '2',
+      'trakt-api-key': TRAKT_ID,
+      'User-Agent': 'GamesTracker/1.0',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
+  });
+}
+
+function saveTrakt(uid, data) {
+  return serial(() => writeJson(traktFile(uid), data));
+}
+
+async function traktStart(user) {
+  if (!traktEnabled()) throw new HttpError(503, 'El servidor todavía no tiene configurado Trakt');
+  const res = await traktFetch('POST', '/oauth/device/code', { body: { client_id: TRAKT_ID } }).catch(() => null);
+  if (!res?.ok) throw new HttpError(502, 'Trakt no respondió, probá en un rato');
+  const d = await res.json();
+  traktDevices.set(user.id, { code: d.device_code, until: Date.now() + d.expires_in * 1000 });
+  return { userCode: d.user_code, url: d.verification_url, interval: d.interval, expiresIn: d.expires_in };
+}
+
+async function traktPoll(user) {
+  const dev = traktDevices.get(user.id);
+  if (!dev || Date.now() > dev.until) return { status: 'expired' };
+  const res = await traktFetch('POST', '/oauth/device/token', {
+    body: { code: dev.code, client_id: TRAKT_ID, client_secret: TRAKT_SECRET },
+  }).catch(() => null);
+  if (!res || res.status === 400 || res.status === 429) return { status: 'pending' };
+  if (res.status !== 200) {
+    traktDevices.delete(user.id);
+    return { status: res.status === 418 ? 'denied' : 'expired' };
+  }
+  const t = await res.json();
+  traktDevices.delete(user.id);
+  const settings = await traktFetch('GET', '/users/settings', { token: t.access_token })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  // Only what is watched from now on counts; the old history isn't brought back.
+  await saveTrakt(user.id, {
+    access: t.access_token,
+    refresh: t.refresh_token,
+    expiresAt: (Number(t.created_at) + Number(t.expires_in)) * 1000,
+    account: str(settings?.user?.username, 60),
+    since: new Date().toISOString(),
+    pending: [],
+    done: [],
+  });
+  return { status: 'connected' };
+}
+
+/** Keeps the token alive; returns null when the connection no longer works. */
+async function freshTrakt(uid, t) {
+  if (t.broken) return null;
+  if (Date.now() < t.expiresAt - 24 * 3600 * 1000) return t;
+  const res = await traktFetch('POST', '/oauth/token', {
+    body: {
+      refresh_token: t.refresh,
+      client_id: TRAKT_ID,
+      client_secret: TRAKT_SECRET,
+      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+      grant_type: 'refresh_token',
+    },
+  }).catch(() => null);
+  if (!res) return t;
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 401) await saveTrakt(uid, { ...t, broken: true });
+    return null;
+  }
+  const n = await res.json();
+  const next = { ...t, access: n.access_token, refresh: n.refresh_token, expiresAt: (Number(n.created_at) + Number(n.expires_in)) * 1000 };
+  await saveTrakt(uid, next);
+  return next;
+}
+
+/** Reads the new Trakt history of one account and queues what was finished. */
+async function traktCheck(uid) {
+  if (!traktEnabled()) return;
+  let t = await readJson(traktFile(uid), null);
+  if (!t) return;
+  t = await freshTrakt(uid, t);
+  if (!t) return;
+  const res = await traktFetch('GET', `/sync/history?${new URLSearchParams({ start_at: t.since, limit: '100' })}`, { token: t.access }).catch(() => null);
+  if (!res) return;
+  if (res.status === 401) return saveTrakt(uid, { ...t, broken: true });
+  if (!res.ok) return;
+  const history = await res.json();
+  if (!Array.isArray(history) || !history.length) return;
+
+  const ratings = (await readData(uid)).ratings ?? {};
+  const done = new Set(t.done ?? []);
+  const found = [];
+  const shows = new Map();
+  for (const h of history) {
+    if (h.type === 'movie' && h.movie?.ids?.tmdb) {
+      found.push({ kind: 'movie', tmdb: h.movie.ids.tmdb, title: str(h.movie.title), year: h.movie.year ?? null, at: h.watched_at });
+    } else if (h.type === 'episode' && h.show?.ids?.trakt && h.show.ids.tmdb && !shows.has(h.show.ids.trakt)) {
+      shows.set(h.show.ids.trakt, h);
+    }
+  }
+  // A series counts as finished when every aired episode was watched.
+  for (const [traktId, h] of shows) {
+    const p = await traktFetch('GET', `/shows/${traktId}/progress/watched?specials=false`, { token: t.access })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (p && p.aired > 0 && p.completed >= p.aired) {
+      found.push({ kind: 'tv', tmdb: h.show.ids.tmdb, title: str(h.show.title), year: h.show.year ?? null, at: h.watched_at });
+    }
+  }
+
+  const fresh = [];
+  for (const f of found) {
+    const key = `${f.kind}:${f.tmdb}`;
+    const id = `tmdb:${f.kind}:${f.tmdb}`;
+    if (done.has(key) || ratings[id]) continue;
+    done.add(key);
+    fresh.push({ key, id, kind: f.kind, title: f.title ?? '?', year: f.year, at: Date.parse(f.at) || Date.now() });
+  }
+  const newest = history.reduce((m, h) => Math.max(m, Date.parse(h.watched_at) || 0), Date.parse(t.since) || 0);
+  await saveTrakt(uid, {
+    ...t,
+    since: new Date(newest + 1000).toISOString(),
+    pending: [...fresh, ...(t.pending ?? [])].slice(0, 50),
+    done: [...done].slice(-500),
+  });
+  await pushTo(
+    uid,
+    fresh.map((f) => ({
+      title: 'MediaTracker',
+      body: `Terminaste ${f.title}${f.kind === 'tv' ? ' (la serie completa)' : ''}. ¿Cuánto le das?`,
+      url: `#/juego/${encodeURIComponent(f.id)}?puntuar=1`,
+      tag: `rate:${f.id}`,
+    })),
+  );
+}
+
+async function traktStatus(user) {
+  const t = await readJson(traktFile(user.id), null);
+  if (!t) return { enabled: traktEnabled(), connected: false, pending: [] };
+  const ratings = (await readData(user.id)).ratings ?? {};
+  return {
+    enabled: traktEnabled(),
+    connected: true,
+    broken: Boolean(t.broken),
+    account: t.account ?? null,
+    // Whatever got rated meanwhile (on any device) stops being pending.
+    pending: (t.pending ?? []).filter((p) => !ratings[p.id]),
+  };
+}
+
+async function traktDismiss(user, key) {
+  const t = await readJson(traktFile(user.id), null);
+  if (t) await saveTrakt(user.id, { ...t, pending: (t.pending ?? []).filter((p) => p.key !== key) });
+  return { ok: true };
+}
+
+async function traktDisconnect(user) {
+  await serial(() => unlink(traktFile(user.id)).catch(() => {}));
+  return { ok: true };
+}
+
+let traktRunning = false;
+async function traktCheckAll() {
+  if (traktRunning || !traktEnabled()) return;
+  traktRunning = true;
+  try {
+    for (const f of await readdir(TRAKT_DIR)) {
+      if (f.endsWith('.json')) await traktCheck(f.slice(0, -5)).catch((e) => console.error('trakt', e.message));
+    }
+  } finally {
+    traktRunning = false;
+  }
 }
 
 // ---------- covers for share images ----------
@@ -851,6 +1053,7 @@ async function handle(req, res) {
         signupOpen: users.length === 0 || ALLOW_SIGNUP,
         igdb: igdbEnabled(),
         imdb: imdb != null,
+        trakt: traktEnabled(),
       });
     }
     case 'POST /api/auth/register':
@@ -927,6 +1130,21 @@ async function handle(req, res) {
       return send(res, 200, await subscribePush(await authenticate(req), await readBody(req)));
     case 'POST /api/push/unsubscribe':
       return send(res, 200, await unsubscribePush(await authenticate(req), (await readBody(req)).endpoint));
+    case 'GET /api/trakt':
+      return send(res, 200, await traktStatus(await authenticate(req)));
+    case 'POST /api/trakt/connect':
+      return send(res, 200, await traktStart(await authenticate(req)));
+    case 'POST /api/trakt/poll':
+      return send(res, 200, await traktPoll(await authenticate(req)));
+    case 'POST /api/trakt/check': {
+      const user = await authenticate(req);
+      await traktCheck(user.id);
+      return send(res, 200, await traktStatus(user));
+    }
+    case 'POST /api/trakt/dismiss':
+      return send(res, 200, await traktDismiss(await authenticate(req), (await readBody(req)).key));
+    case 'POST /api/trakt/disconnect':
+      return send(res, 200, await traktDisconnect(await authenticate(req)));
     case 'GET /api/critics': {
       // Only for signed-in users, so the server's IGDB quota can't be used by strangers.
       await authenticate(req);
@@ -951,6 +1169,7 @@ await mkdir(STATE_DIR, { recursive: true });
 await mkdir(BACKUP_DIR, { recursive: true });
 await mkdir(ACTIVITY_DIR, { recursive: true });
 await mkdir(PUSH_DIR, { recursive: true });
+await mkdir(TRAKT_DIR, { recursive: true });
 await loadSecret();
 await loadVapid();
 
@@ -980,6 +1199,7 @@ if (process.argv[2] === 'reset-password') {
 }
 
 if (process.env.IMDB !== 'off') refreshImdb();
+if (traktEnabled()) setInterval(() => void traktCheckAll(), TRAKT_POLL_MS).unref?.();
 
 http
   .createServer((req, res) => {

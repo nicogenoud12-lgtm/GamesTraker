@@ -11,6 +11,7 @@ import { tmdbSearch } from '../lib/tmdb';
 import { useMode } from '../store/useUi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
+import TraktSettings from '../components/TraktSettings';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -53,6 +54,7 @@ export default function Settings() {
       <div className="space-y-4 px-5 lg:max-w-2xl">
         <SyncSection />
         {loggedIn && <FriendsSettings />}
+        {loggedIn && <TraktSettings />}
 
         {/* The section of the mode in use goes first. */}
         {(mode === 'games' ? ['rawg', 'tmdb'] : ['tmdb', 'rawg']).map((k) =>

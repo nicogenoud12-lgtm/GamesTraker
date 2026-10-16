@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, ExternalLink, ListPlus, Loader2, Pencil, Play, Repeat2, Share2, Star, Youtube } from 'lucide-react';
 import TiltedCard from '../components/reactbits/TiltedCard';
 import RatingSheet from '../components/RatingSheet';
@@ -55,6 +55,15 @@ export default function GamePage() {
   const [similar, setSimilar] = useState<Game[]>([]);
   const isDesktop = useIsDesktop();
   const tint = useCoverTint(detail ?? snapshot ?? null);
+  // "?puntuar=1" (from a "you finished this" notification) opens the rating right away.
+  const [params, setParams] = useSearchParams();
+  const askToRate = params.get('puntuar') === '1';
+  const ready = Boolean(detail ?? snapshot);
+  useEffect(() => {
+    if (!askToRate || !ready) return;
+    setRateOpen(true);
+    setParams({}, { replace: true });
+  }, [askToRate, ready]);
 
   // Opening a movie from the games side (or a game from the movies side) switches the app to its mode.
   useEffect(() => {
