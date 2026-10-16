@@ -4,6 +4,7 @@ import { BookOpen, ChevronRight, LayoutGrid, Rows3, Share2 } from 'lucide-react'
 import { KINDS } from '../lib/kinds';
 import TierShareSheet from '../components/TierShareSheet';
 import Cover from '../components/Cover';
+import TierSection, { CoverScore } from '../components/TierSection';
 import ScrollRow from '../components/ScrollRow';
 import { ScoreRing } from '../components/Score';
 import { TIERS, TIER_BY_ID, type Tier } from '../lib/tiers';
@@ -191,7 +192,7 @@ function Summary({ entries, avg }: { entries: Entry[]; avg: number }) {
 /** Classic tier-list layout: one coloured row per word rating, best at the top. */
 function TierList({ entries, onTier }: { entries: Entry[]; onTier: (id: TierId) => void }) {
   return (
-    <div className="space-y-2 px-5">
+    <div className="space-y-2.5 px-5">
       {TIERS.slice()
         .reverse()
         .map((t) => (
@@ -202,40 +203,17 @@ function TierList({ entries, onTier }: { entries: Entry[]; onTier: (id: TierId) 
 }
 
 function TierRow({ tier, entries, onTier }: { tier: Tier; entries: Entry[]; onTier: (id: TierId) => void }) {
-  const empty = entries.length === 0;
   return (
-    <div
-      className={`flex min-h-[104px] overflow-hidden rounded-2xl border bg-surface ${empty ? 'opacity-50' : ''}`}
-      style={{ borderColor: `${tier.color}40` }}
-    >
-      <button
-        onClick={() => !empty && onTier(tier.id)}
-        disabled={empty}
-        className="flex w-[78px] shrink-0 flex-col items-center justify-center gap-0.5 text-black lg:w-[120px]"
-        style={{ background: `linear-gradient(160deg, ${tier.color}, ${tier.color}cc)` }}
-      >
-        <span className="text-2xl leading-none">{tier.emoji}</span>
-        <span className="font-display text-[13px] leading-tight font-bold">{tier.label}</span>
-        <span className="mt-1 rounded-full bg-black/15 px-2 py-0.5 font-display text-xs leading-none font-bold tabular-nums">{entries.length}</span>
-      </button>
-      {empty ? (
-        <div className="flex flex-1 items-center px-4 text-sm text-muted">Nada todavía</div>
-      ) : (
-        <ScrollRow wrapperClassName="flex min-w-0 flex-1 items-center" className="flex w-full items-center gap-2 p-2">
-          {entries.map(({ game, rating }) => (
-            <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[66px] shrink-0 lg:w-[88px]" title={game.name}>
-              <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
-              <span
-                className="absolute right-1 bottom-1 rounded-md bg-black/80 px-1 font-display text-[11px] font-bold tabular-nums backdrop-blur"
-                style={{ color: tier.color }}
-              >
-                {rating.score}
-              </span>
-            </Link>
-          ))}
-        </ScrollRow>
-      )}
-    </div>
+    <TierSection tier={tier} count={entries.length} onOpen={() => onTier(tier.id)}>
+      <ScrollRow wrapperClassName="min-w-0" className="flex gap-2 px-4 pb-3">
+        {entries.map(({ game, rating }) => (
+          <Link key={game.id} to={`/juego/${encodeURIComponent(game.id)}`} className="relative w-[72px] shrink-0 lg:w-[92px]" title={game.name}>
+            <Cover game={game} className="aspect-[3/4] rounded-lg text-[9px]" />
+            <CoverScore score={rating.score} color={tier.color} />
+          </Link>
+        ))}
+      </ScrollRow>
+    </TierSection>
   );
 }
 
