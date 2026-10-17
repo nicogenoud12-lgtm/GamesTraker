@@ -47,9 +47,10 @@ PRs relevantes en `nicogenoud12-lgtm/GamesTraker` (todos squash-mergeados a `mai
   segundo plano de los juegos puntuados o en listas (40 por visita, 1 cada 1,5 s, vencen a los 14 días).
 - **Playnite:** extensión PowerShell (`Type: Script`) que la app arma como `.pext` con la clave adentro. Al abrir
   Playnite manda los juegos jugados; en cada arranque/cierre, ese juego. Arrancado → Jugando ahora (una vez, con la
-  fecha); marcado Superado/Completado → aviso para puntuar con horas, estado y fecha. En la primera sincronización solo
+  fecha), y también lo jugado en los últimos 7 días que no está terminado (Playnite solo dice "Jugando" si se lo
+  configura); sale de Próximos a jugar. Marcado Superado/Completado → aviso para puntuar con horas, estado y fecha. En la primera sincronización solo
   cuenta lo jugado en los últimos 30 días (si no, avisaría por todo lo viejo). El servidor busca cada nombre en RAWG
-  (`search_precise`); si no puede (sin key de RAWG en el servidor, o RAWG falla) Ajustes muestra por qué y la app los
+  (`search_precise`), probando la key del `.env` y si RAWG la rechaza las de Ajustes; si no puede (sin key de RAWG en el servidor, o RAWG falla) Ajustes muestra por qué y la app los
   busca con su key al abrirse y se los pasa (`/api/playnite/resolve`), que los recuerda para los próximos avisos.
 - **Trakt → Viendo ahora:** una vez por título; si Nico lo saca de la lista, no vuelve. Fecha de inicio = el día
   que se agrega.

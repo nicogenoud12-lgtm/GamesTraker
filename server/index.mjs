@@ -1682,6 +1682,7 @@ const FINISHED = /beaten|superado|terminado|completed|completado|100/i;
 const COMPLETED = /completed|completado|100/i;
 const ABANDONED = /abandon/i;
 const RECENT_MS = 30 * 864e5;
+const PLAYED_LATELY_MS = 7 * 864e5;
 
 /** The key goes in the extension: "<user id>.<secret>", so the file is found without a lookup table. */
 async function playniteConnect(user) {
@@ -1760,7 +1761,9 @@ async function playniteReport(uid, event, games, again = false) {
     const startedNow = event === 'started';
     // Statuses from long ago (the first report brings the whole library) don't count, only recent play.
     const recent = startedNow || event === 'stopped' || (g.lastActivity != null && Date.now() - g.lastActivity < RECENT_MS);
-    const isPlaying = startedNow || (recent && PLAYING.test(g.status));
+    // Played in the last few days and not finished counts too: Playnite only says "Playing" if it's set that way.
+    const playedLately = g.lastActivity != null && Date.now() - g.lastActivity < PLAYED_LATELY_MS && !FINISHED.test(g.status);
+    const isPlaying = startedNow || (recent && PLAYING.test(g.status)) || playedLately;
     known[id] = {
       name: rawg.name,
       year: rawg.released ? Number(rawg.released.slice(0, 4)) : g.year,
