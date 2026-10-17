@@ -56,7 +56,8 @@ export default function PlayniteSettings() {
           </p>
           {(status.unmatched?.length ?? 0) > 0 && (
             <p className="text-xs text-muted">
-              No los encontré en el catálogo por ese nombre: {status.unmatched!.slice(0, 8).join(', ')}
+              {status.matchError ? `El servidor no pudo buscar en RAWG (${status.matchError}): los busca la app cuando la abrís. ` : ''}
+              No los encontré en el catálogo por ese nombre: {status.unmatched!.slice(0, 8).map((u) => u.name).join(', ')}
               {status.unmatched!.length > 8 ? '…' : ''}
             </p>
           )}

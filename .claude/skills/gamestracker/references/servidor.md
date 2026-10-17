@@ -58,7 +58,9 @@ pudo preguntar) · `GET /api/games/index` (gzip + ETag/304, `Cache-Control: priv
 `GET /api/games/discover?from&to&order=best|popular&genre&platform&page` (IGDB → ids de RAWG; 503 sin IGDB) ·
 Playnite: `POST /api/playnite/report` (header `X-Playnite-Key: <uid>.<secreto>`, sin sesión; responde 202 y procesa
 después) · `GET /api/playnite` · `POST /api/playnite/connect` · `GET /api/playnite/extension?origin=` (el `.pext` con la
-clave y la dirección adentro) · `POST /api/playnite/{playing,dismiss,disconnect}`. Datos en `DATA_DIR/playnite/<uid>.json`.
+clave y la dirección adentro) · `POST /api/playnite/{playing,dismiss,disconnect}` · `POST /api/playnite/resolve` (`{matches:[{name, game}]}`: los
+juegos que la app encontró en RAWG para los nombres que el servidor no pudo; quedan como `aliases` y se reprocesan los que
+esperaban). Datos en `DATA_DIR/playnite/<uid>.json`.
 `GET /api/rt?imdb=tt…` · `GET /api/imdb?id=tt…` (503 mientras baja el dataset) · `GET /api/img?url=` (proxy de
 imágenes de `media.rawg.io`, `image.tmdb.org`, `images.igdb.com` para canvas/colores).
 

@@ -905,10 +905,11 @@ async function rawgMatch(name, year) {
     game = { id, name: n, released, image: image && !image.startsWith('http') ? RAWG_MEDIA + image : image, genres, platforms };
   } else {
     const key = await rawgKey();
-    if (!key) return null;
-    const qs = new URLSearchParams({ key, search: name, page_size: '10', exclude_additions: 'true' });
+    if (!key) throw new HttpError(503, 'le falta la key de RAWG');
+    // Without search_precise RAWG's search is fuzzy and the game itself can be missing from the first page.
+    const qs = new URLSearchParams({ key, search: name, search_precise: 'true', page_size: '20', exclude_additions: 'true' });
     const res = await fetch(`${RAWG_API}/games?${qs}`, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new HttpError(502, `Error de RAWG (${res.status})`);
+    if (!res.ok) throw new HttpError(502, res.status === 401 ? 'RAWG rechazó su key' : `RAWG respondió ${res.status}`);
     const results = (await res.json())?.results ?? [];
     const r = pickMatch(results, name, year, (g) => coverName(g.name), (g) => (g.released ? Number(g.released.slice(0, 4)) : null));
     if (r)
@@ -961,7 +962,8 @@ async function discoverGames({ from, to, order, genre, platform, page }) {
       rows.slice(i, i + 4).map(async (g) => {
         const year = yearOf(g.first_release_date);
         const rawg = await rawgMatch(g.name, year).catch((e) => {
-          console.error(`discover: ${e.message}`);
+          // Without a key there's nothing to log twenty times a page.
+          if (e.status !== 503) console.error(`discover: ${e.message}`);
           return null;
         });
         if (!rawg) return null;
@@ -1699,8 +1701,16 @@ function playniteGames(body) {
 
 let playniteQueue = Promise.resolve();
 
+const unmatchedLeft = (p, matched) => waitingOf(p).some((u) => !matched.has(u.name));
+
+/** The reported games not found yet; the first version kept only their names. */
+const waitingOf = (p) =>
+  (p.unmatched ?? []).map((u) =>
+    typeof u === 'string' ? { name: u, year: null, playtime: 0, lastActivity: null, status: '', event: 'library' } : u,
+  );
+
 /** Matches the reported games to RAWG and queues what changed; runs after answering the extension. */
-async function playniteReport(uid, event, games) {
+async function playniteReport(uid, event, games, again = false) {
   const p = await readJson(playniteFile(uid), null);
   if (!p) return;
   const ratings = (await readData(uid)).ratings ?? {};
@@ -1711,17 +1721,24 @@ async function playniteReport(uid, event, games) {
   const playing = p.playing ?? [];
   const fresh = [];
   const unmatched = [];
+  const matched = new Set();
+  let matchError = null;
+  // Games the app found in RAWG for the server (when the server can't search it), by simplified name.
+  const aliases = p.aliases ?? {};
   // Opening Playnite reports the whole played library: the most recent first, and only so many lookups per run.
   const list = [...games].sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0)).slice(0, 400);
   for (const g of list) {
-    const rawg = await rawgMatch(g.name, g.year).catch((e) => {
-      console.error(`playnite: ${g.name}: ${e.message}`);
-      return null;
-    });
+    const rawg =
+      aliases[simplify(g.name)] ??
+      (await rawgMatch(g.name, g.year).catch((e) => {
+        matchError ??= e.message;
+        return null;
+      }));
     if (!rawg) {
-      unmatched.push(g.name);
+      unmatched.push({ ...g, event });
       continue;
     }
+    matched.add(g.name);
     const id = `rawg:${rawg.id}`;
     const before = known[id];
     const startedNow = event === 'started';
@@ -1764,14 +1781,17 @@ async function playniteReport(uid, event, games) {
     pending: pending.slice(0, 50),
     playing: playing.slice(0, 50),
     done: [...done].slice(-1000),
-    lastReportAt: new Date().toISOString(),
-    lastEvent: event,
-    // For Ajustes: what the last report was about, and the games RAWG doesn't know by that name.
-    lastGame: event === 'library' ? null : (games[0]?.name ?? null),
-    lastCount: games.length,
-    unmatched: [...new Set([...unmatched, ...(p.unmatched ?? [])])].slice(0, 30),
+    // For Ajustes: what the last report was about (not the games the app just found for it), and the ones RAWG doesn't know by that name.
+    ...(again
+      ? {}
+      : { lastReportAt: new Date().toISOString(), lastEvent: event, lastGame: event === 'library' ? null : (games[0]?.name ?? null), lastCount: games.length }),
+    // Kept with what Playnite said about them, so the app can look them up and they're counted then.
+    unmatched: [...unmatched, ...waitingOf(p).filter((u) => !matched.has(u.name) && !unmatched.some((x) => x.name === u.name))].slice(0, 200),
+    matchError: unmatched.length ? matchError : again && unmatchedLeft(p, matched) ? (p.matchError ?? null) : null,
   });
-  console.log(`playnite: ${event}, ${games.length} juego(s), ${unmatched.length} sin encontrar en RAWG`);
+  console.log(
+    `playnite: ${event}, ${games.length} juego(s), ${unmatched.length} sin encontrar en RAWG${matchError ? ` (${matchError})` : ''}`,
+  );
   await pushTo(
     uid,
     fresh.map((f) => ({
@@ -1797,12 +1817,54 @@ async function playniteStatus(user) {
     lastEvent: p.lastEvent ?? null,
     lastGame: p.lastGame ?? null,
     lastCount: p.lastCount ?? 0,
-    unmatched: p.unmatched ?? [],
+    // Names only for Ajustes, with the year for the app to look them up itself.
+    unmatched: waitingOf(p).map((u) => ({ name: u.name, year: u.year })),
+    matchError: p.matchError ?? null,
     games: Object.keys(p.games ?? {}).length,
     pending: (p.pending ?? []).filter((x) => !ratings[x.id]),
     playing: (p.playing ?? []).filter((x) => !added.has(x.id) && !ratings[x.id]),
     hours,
   };
+}
+
+/**
+ * The games the app found in RAWG for names the server couldn't: remembered for
+ * the next reports, and the ones waiting are processed again now.
+ */
+async function playniteResolve(user, matches) {
+  if (!Array.isArray(matches)) throw new HttpError(400, 'Formato inválido');
+  const found = {};
+  for (const m of matches.slice(0, 200)) {
+    const name = str(m?.name, 200);
+    const g = m?.game;
+    const id = Number(g?.id);
+    if (!name || !Number.isInteger(id) || id <= 0) continue;
+    found[name] = {
+      id,
+      name: str(g.name, 200) ?? name,
+      released: typeof g.released === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(g.released) ? g.released : null,
+      image: typeof g.image === 'string' && /^https:\/\//.test(g.image) ? g.image.slice(0, 500) : null,
+      genres: (Array.isArray(g.genres) ? g.genres : []).slice(0, 3).map((x) => str(x, 60)).filter(Boolean),
+      platforms: (Array.isArray(g.platforms) ? g.platforms : []).slice(0, 4).map((x) => str(x, 60)).filter(Boolean),
+    };
+  }
+  // In the reports' queue, so a report arriving meanwhile doesn't drop what's saved here.
+  const run = playniteQueue.then(async () => {
+    const p = await readJson(playniteFile(user.id), null);
+    if (!p || !Object.keys(found).length) return;
+    const aliases = { ...(p.aliases ?? {}) };
+    for (const [name, game] of Object.entries(found)) aliases[simplify(name)] = game;
+    await savePlaynite(user.id, { ...p, aliases: Object.fromEntries(Object.entries(aliases).slice(-3000)) });
+    const waiting = waitingOf(p).filter((u) => found[u.name]);
+    // In the order they'd have come: what was started last.
+    for (const event of ['library', 'stopped', 'started']) {
+      const games = waiting.filter((u) => u.event === event).map(({ event: _, ...g }) => g);
+      if (games.length) await playniteReport(user.id, event, games, true);
+    }
+  });
+  playniteQueue = run.catch(() => {});
+  await run;
+  return playniteStatus(user);
 }
 
 async function playnitePlayingAdded(user, ids) {
@@ -2144,6 +2206,8 @@ async function handle(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="GamesTracker.pext"' });
       return res.end(await playniteExtension(user, origin));
     }
+    case 'POST /api/playnite/resolve':
+      return send(res, 200, await playniteResolve(await authenticate(req), (await readBody(req)).matches));
     case 'POST /api/playnite/playing':
       return send(res, 200, await playnitePlayingAdded(await authenticate(req), (await readBody(req)).ids));
     case 'POST /api/playnite/dismiss':
