@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from './sync';
 import { currentKeys, itemDetail } from './catalog';
+import { rawgSearch } from './rawg';
 import { localDay } from './format';
 import type { Game } from './types';
 import { useSync } from '../store/useSync';
@@ -32,8 +33,10 @@ export interface PlayniteStatus {
   lastEvent?: 'library' | 'started' | 'stopped' | null;
   lastGame?: string | null;
   lastCount?: number;
-  /** Reported games that RAWG doesn't know by that name. */
-  unmatched?: string[];
+  /** Reported games the server didn't find in RAWG by that name; the app looks them up itself. */
+  unmatched?: { name: string; year: number | null }[];
+  /** Why the server couldn't search RAWG (no key, RAWG's error), when it couldn't. */
+  matchError?: string | null;
   games?: number;
   pending: PlayniteItem[];
   playing: PlayniteItem[];
@@ -52,10 +55,74 @@ export async function refreshPlaynite(): Promise<PlayniteStatus | null> {
     const status = await api<PlayniteStatus>('GET', '/playnite');
     usePlaynite.setState({ status });
     void addPlaying(status.playing);
+    void resolveUnmatched(status.unmatched);
     return status;
   } catch {
     // An older server without Playnite, or offline.
     return usePlaynite.getState().status;
+  }
+}
+
+const simplify = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\s*\((19|20)\d{2}\)\s*$/, '')
+    .replace(/[^a-z0-9]/g, '');
+
+/** The same name (and a year off by one at most); a longer or shorter subtitle only from the same year. */
+function pickGame(results: Game[], name: string, year: number | null): Game | null {
+  const want = simplify(name);
+  const yearOf = (g: Game) => (g.released ? Number(g.released.slice(0, 4)) : null);
+  const near = (g: Game) => !year || !yearOf(g) || Math.abs(yearOf(g)! - year) <= 1;
+  const exact = results.filter((g) => simplify(g.name) === want);
+  return (
+    exact.find(near) ??
+    exact[0] ??
+    results.find((g) => near(g) && year && (simplify(g.name).startsWith(want) || want.startsWith(simplify(g.name)))) ??
+    null
+  );
+}
+
+// Asked once per session: the ones RAWG doesn't have by that name stay listed in Ajustes.
+const tried = new Set<string>();
+let resolving = false;
+
+/**
+ * When the server can't find a Playnite game in RAWG (it has no key, or RAWG
+ * failed it), the app looks it up with its own key and tells the server.
+ */
+async function resolveUnmatched(items: PlayniteStatus['unmatched']): Promise<void> {
+  const key = currentKeys().rawg;
+  const todo = (items ?? []).filter((u) => !tried.has(u.name)).slice(0, 40);
+  if (resolving || !key || !todo.length) return;
+  resolving = true;
+  try {
+    const matches: { name: string; game: { id: number; name: string; released: string | null; image: string | null; genres: string[]; platforms: string[] } }[] = [];
+    for (let i = 0; i < todo.length; i += 4) {
+      await Promise.all(
+        todo.slice(i, i + 4).map(async (u) => {
+          tried.add(u.name);
+          const g = pickGame(await rawgSearch(key, u.name).catch(() => []), u.name, u.year);
+          if (g) {
+            matches.push({
+              name: u.name,
+              game: { id: Number(g.id.slice(5)), name: g.name, released: g.released, image: g.cover, genres: g.genres.slice(0, 3), platforms: g.platforms.slice(0, 4) },
+            });
+          }
+        }),
+      );
+    }
+    if (!matches.length) return;
+    const status = await api<PlayniteStatus>('POST', '/playnite/resolve', { matches });
+    usePlaynite.setState({ status });
+    void addPlaying(status.playing);
+  } catch {
+    // Tried again next session.
+  } finally {
+    resolving = false;
   }
 }
 

@@ -66,6 +66,11 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Playnite-Key: $PKEY" -H 'Content-Type: application/json' \
             -d '{"event":"started","games":[{"name":"Hades","playtime":60}]}' localhost:8787/api/playnite/report)" = 202
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/playnite | grep -q '"connected":true'
+          # Sin key de RAWG en el servidor no lo encuentra: lo busca la app y se lo pasa.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' localhost:8787/api/playnite/resolve)" = 400
+          curl -sf -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"matches":[{"name":"Hades","game":{"id":274755,"name":"Hades","released":"2020-09-17"}}]}' localhost:8787/api/playnite/resolve \
+            | jq -e '.games == 1 and .playing[0].id == "rawg:274755" and .unmatched == []'
           # Sin claves de Trakt en el servidor, la conexión con Nuvio aparece como no configurada.
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/trakt | grep -q '"enabled":false'
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST localhost:8787/api/trakt/connect)" = 503
