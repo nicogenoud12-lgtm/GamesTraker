@@ -732,14 +732,33 @@ const RAWG_MEDIA = 'https://media.rawg.io/media/';
 let gamesIndex = null;
 let indexBuilding = false;
 
-async function rawgKey() {
-  const env = process.env.RAWG_KEY || process.env.VITE_RAWG_KEY;
-  if (env) return env;
-  for (const u of (await loadUsers()).users) {
-    const key = (await readData(u.id)).settings?.apiKey?.trim();
-    if (key) return key;
+// Keys RAWG refused (an old one left in .env, say), skipped for a while in favor of the next.
+const badRawgKeys = new Map();
+const BAD_KEY_MS = 3600e3;
+
+/** The server's key first, then the ones saved in Ajustes, without those RAWG just refused. */
+async function rawgKeys() {
+  const keys = [process.env.RAWG_KEY, process.env.VITE_RAWG_KEY];
+  for (const u of (await loadUsers()).users) keys.push((await readData(u.id)).settings?.apiKey);
+  return [...new Set(keys.map((k) => k?.trim()).filter(Boolean))];
+}
+
+/** GET on RAWG with the first key it accepts; null when there's no key at all. */
+async function rawgFetch(path, params, timeout) {
+  const all = await rawgKeys();
+  const keys = all.filter((k) => !(Date.now() - (badRawgKeys.get(k) ?? 0) < BAD_KEY_MS));
+  if (all.length && !keys.length) throw new HttpError(502, 'RAWG rechazó sus keys');
+  let res = null;
+  for (const key of keys) {
+    const qs = new URLSearchParams({ key, ...params });
+    res = await fetch(`${RAWG_API}${path}?${qs}`, { signal: AbortSignal.timeout(timeout) }).catch((e) => {
+      throw new HttpError(502, `no se pudo conectar con RAWG (${e.cause?.code ?? e.message})`);
+    });
+    if (res.status !== 401 && res.status !== 403) return res;
+    badRawgKeys.set(key, Date.now());
+    console.error(`RAWG rechazó una key (${res.status}); pruebo con la siguiente`);
   }
-  return null;
+  return res;
 }
 
 /** One game, short: id, name, release, image (without RAWG's prefix), genres, platforms, score. */
@@ -773,13 +792,12 @@ async function buildGamesIndex() {
   if (indexBuilding) return;
   indexBuilding = true;
   try {
-    const key = await rawgKey();
-    if (!key) return;
+    if (!(await rawgKeys()).length) return;
     const games = [];
     const seen = new Set();
     for (let page = 1; page <= INDEX_PAGES; page++) {
-      const qs = new URLSearchParams({ key, ordering: '-added', page_size: '40', page: String(page), exclude_additions: 'true' });
-      const res = await fetch(`${RAWG_API}/games?${qs}`, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
+      const params = { ordering: '-added', page_size: '40', page: String(page), exclude_additions: 'true' };
+      const res = await rawgFetch('/games', params, 20_000).catch(() => null);
       if (!res?.ok) break;
       const json = await res.json().catch(() => null);
       for (const g of json?.results ?? []) {
@@ -904,12 +922,10 @@ async function rawgMatch(name, year) {
     const [id, n, released, image, genres, platforms] = indexed;
     game = { id, name: n, released, image: image && !image.startsWith('http') ? RAWG_MEDIA + image : image, genres, platforms };
   } else {
-    const key = await rawgKey();
-    if (!key) throw new HttpError(503, 'le falta la key de RAWG');
     // Without search_precise RAWG's search is fuzzy and the game itself can be missing from the first page.
-    const qs = new URLSearchParams({ key, search: name, search_precise: 'true', page_size: '20', exclude_additions: 'true' });
-    const res = await fetch(`${RAWG_API}/games?${qs}`, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new HttpError(502, res.status === 401 ? 'RAWG rechazó su key' : `RAWG respondió ${res.status}`);
+    const res = await rawgFetch('/games', { search: name, search_precise: 'true', page_size: '20', exclude_additions: 'true' }, 15_000);
+    if (!res) throw new HttpError(503, 'le falta la key de RAWG');
+    if (!res.ok) throw new HttpError(502, res.status === 401 || res.status === 403 ? 'RAWG rechazó sus keys' : `RAWG respondió ${res.status}`);
     const results = (await res.json())?.results ?? [];
     const r = pickMatch(results, name, year, (g) => coverName(g.name), (g) => (g.released ? Number(g.released.slice(0, 4)) : null));
     if (r)
