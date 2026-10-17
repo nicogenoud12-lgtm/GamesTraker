@@ -5,7 +5,7 @@ import { rawgSearch } from './rawg';
 import { localDay } from './format';
 import type { Game } from './types';
 import { useSync } from '../store/useSync';
-import { PLAYING_LIST_ID, useStore } from '../store/useStore';
+import { NEXT_LIST_ID, PLAYING_LIST_ID, useStore } from '../store/useStore';
 import { useToast } from '../store/useToast';
 
 // Playnite (the PC launcher), through a small extension that reports to our server:
@@ -140,6 +140,8 @@ async function addPlaying(items: PlayniteItem[] | undefined): Promise<void> {
       const fallback: Game = { id: p.id, name: p.title, cover: null, released: p.year ? `${p.year}-01-01` : null, genres: [], platforms: [] };
       const game = (await itemDetail(currentKeys(), p.id).catch(() => null)) ?? fallback;
       store.addToList(PLAYING_LIST_ID, game, 'top');
+      // Like "Empezar a jugar": it leaves "Próximos a jugar".
+      store.removeFromList(NEXT_LIST_ID, p.id);
       useStore.getState().setStart(p.id, localDay(new Date(p.at)));
       added.push(p.title);
     }
