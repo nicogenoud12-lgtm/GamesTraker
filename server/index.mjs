@@ -1710,11 +1710,18 @@ async function playniteReport(uid, event, games) {
   const pending = p.pending ?? [];
   const playing = p.playing ?? [];
   const fresh = [];
+  const unmatched = [];
   // Opening Playnite reports the whole played library: the most recent first, and only so many lookups per run.
   const list = [...games].sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0)).slice(0, 400);
   for (const g of list) {
-    const rawg = await rawgMatch(g.name, g.year).catch(() => null);
-    if (!rawg) continue;
+    const rawg = await rawgMatch(g.name, g.year).catch((e) => {
+      console.error(`playnite: ${g.name}: ${e.message}`);
+      return null;
+    });
+    if (!rawg) {
+      unmatched.push(g.name);
+      continue;
+    }
     const id = `rawg:${rawg.id}`;
     const before = known[id];
     const startedNow = event === 'started';
@@ -1759,7 +1766,12 @@ async function playniteReport(uid, event, games) {
     done: [...done].slice(-1000),
     lastReportAt: new Date().toISOString(),
     lastEvent: event,
+    // For Ajustes: what the last report was about, and the games RAWG doesn't know by that name.
+    lastGame: event === 'library' ? null : (games[0]?.name ?? null),
+    lastCount: games.length,
+    unmatched: [...new Set([...unmatched, ...(p.unmatched ?? [])])].slice(0, 30),
   });
+  console.log(`playnite: ${event}, ${games.length} juego(s), ${unmatched.length} sin encontrar en RAWG`);
   await pushTo(
     uid,
     fresh.map((f) => ({
@@ -1782,6 +1794,10 @@ async function playniteStatus(user) {
     connected: true,
     // Before the extension's first report it isn't working yet.
     lastReportAt: p.lastReportAt ?? null,
+    lastEvent: p.lastEvent ?? null,
+    lastGame: p.lastGame ?? null,
+    lastCount: p.lastCount ?? 0,
+    unmatched: p.unmatched ?? [],
     games: Object.keys(p.games ?? {}).length,
     pending: (p.pending ?? []).filter((x) => !ratings[x.id]),
     playing: (p.playing ?? []).filter((x) => !added.has(x.id) && !ratings[x.id]),
@@ -1868,9 +1884,10 @@ const psString = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 async function playniteExtension(user, origin) {
   const { key } = await playniteConnect(user);
-  const manifest = ['Id: GamesTracker_Playnite', 'Name: GamesTracker', 'Author: GamesTracker', 'Version: 1.0', 'Module: GamesTracker.psm1', 'Type: Script', ''].join('\r\n');
+  const manifest = ['Id: GamesTracker_Playnite', 'Name: GamesTracker', 'Author: GamesTracker', 'Version: 1.1', 'Module: GamesTracker.psm1', 'Type: Script', ''].join('\r\n');
   const script = `# GamesTracker: tells the app when a game starts or stops and, when Playnite opens,
 # which games were played, for how long and their completion status.
+# Extensions > GamesTracker > "Enviar mis juegos ahora" sends them on demand and shows the answer.
 $script:Url = ${psString(origin)}
 $script:Key = ${psString(key)}
 
@@ -1884,29 +1901,56 @@ function Get-GamesTrackerGame($game) {
     @{ name = $game.Name; year = $year; playtime = [int64]$game.Playtime; lastActivity = $last; status = $status }
 }
 
-function Send-GamesTrackerReport($event, $games) {
+function Get-GamesTrackerLibrary() {
+    $played = @($PlayniteApi.Database.Games | Where-Object { $_.Playtime -gt 0 -or $_.LastActivity })
+    @($played | ForEach-Object { Get-GamesTrackerGame $_ })
+}
+
+# Returns what happened, in words, for the log and the menu's message.
+function Send-GamesTrackerReport($kind, $games) {
     try {
-        $body = @{ event = $event; games = @($games) } | ConvertTo-Json -Depth 4 -Compress
+        # Older Windows setups default to TLS 1.0, which the server doesn't accept.
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $body = @{ event = $kind; games = @($games) } | ConvertTo-Json -Depth 4 -Compress
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-        Invoke-RestMethod -Uri "$($script:Url)/api/playnite/report" -Method Post -Headers @{ 'X-Playnite-Key' = $script:Key } -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 15 | Out-Null
+        $answer = Invoke-RestMethod -Uri "$($script:Url)/api/playnite/report" -Method Post -Headers @{ 'X-Playnite-Key' = $script:Key } -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 20
+        $message = "GamesTracker: enviado ($kind, $(@($games).Count) juego(s)); el servidor recibio $($answer.received)."
+        $__logger.Info($message)
+        return $message
     } catch {
-        $__logger.Warn("GamesTracker: $($_.Exception.Message)")
+        $message = "GamesTracker: no se pudo enviar a $($script:Url): $($_.Exception.Message)"
+        $__logger.Error($message)
+        return $message
     }
 }
 
 function OnApplicationStarted() {
-    $played = @($PlayniteApi.Database.Games | Where-Object { $_.Playtime -gt 0 -or $_.LastActivity })
-    Send-GamesTrackerReport 'library' @($played | ForEach-Object { Get-GamesTrackerGame $_ })
+    Send-GamesTrackerReport 'library' (Get-GamesTrackerLibrary) | Out-Null
 }
 
 function OnGameStarted() {
     param($evnArgs)
-    Send-GamesTrackerReport 'started' @(Get-GamesTrackerGame $evnArgs.Game)
+    Send-GamesTrackerReport 'started' @(Get-GamesTrackerGame $evnArgs.Game) | Out-Null
 }
 
 function OnGameStopped() {
     param($evnArgs)
-    Send-GamesTrackerReport 'stopped' @(Get-GamesTrackerGame $evnArgs.Game)
+    Send-GamesTrackerReport 'stopped' @(Get-GamesTrackerGame $evnArgs.Game) | Out-Null
+}
+
+function GetMainMenuItems() {
+    param($getMainMenuItemsArgs)
+    $item = New-Object Playnite.SDK.Plugins.ScriptMainMenuItem
+    $item.Description = 'Enviar mis juegos ahora'
+    $item.FunctionName = 'Invoke-GamesTrackerSync'
+    $item.MenuSection = '@GamesTracker'
+    return $item
+}
+
+function Invoke-GamesTrackerSync() {
+    param($scriptMainMenuItemActionArgs)
+    $message = Send-GamesTrackerReport 'library' (Get-GamesTrackerLibrary)
+    $PlayniteApi.Dialogs.ShowMessage($message, 'GamesTracker')
 }
 `.replace(/\n/g, '\r\n');
   return zipStore([
@@ -2087,7 +2131,7 @@ async function handle(req, res) {
       const event = ['library', 'started', 'stopped'].includes(body?.event) ? body.event : 'library';
       const games = playniteGames(body);
       playniteQueue = playniteQueue.then(() => playniteReport(uid, event, games)).catch((e) => console.error(`playnite: ${e.message}`));
-      return send(res, 202, { ok: true });
+      return send(res, 202, { ok: true, received: games.length });
     }
     case 'GET /api/playnite':
       return send(res, 200, await playniteStatus(await authenticate(req)));

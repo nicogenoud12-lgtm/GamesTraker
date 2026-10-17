@@ -28,6 +28,12 @@ export interface PlayniteStatus {
   connected: boolean;
   /** The extension's last report; null until it's installed and Playnite opened. */
   lastReportAt?: string | null;
+  /** What the last report was: Playnite opening ("library"), or a game started or stopped, and which. */
+  lastEvent?: 'library' | 'started' | 'stopped' | null;
+  lastGame?: string | null;
+  lastCount?: number;
+  /** Reported games that RAWG doesn't know by that name. */
+  unmatched?: string[];
   games?: number;
   pending: PlayniteItem[];
   playing: PlayniteItem[];

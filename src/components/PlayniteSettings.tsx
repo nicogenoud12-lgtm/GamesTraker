@@ -44,7 +44,24 @@ export default function PlayniteSettings() {
         <div className="mt-3 space-y-2">
           <p className="text-sm">
             Conectado: {status.games ?? 0} {status.games === 1 ? 'juego' : 'juegos'} de Playnite. Último aviso:{' '}
-            {last.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}.
+            {last.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+            {status.lastEvent === 'started' && status.lastGame
+              ? ` (arrancaste ${status.lastGame})`
+              : status.lastEvent === 'stopped' && status.lastGame
+                ? ` (cerraste ${status.lastGame})`
+                : status.lastEvent === 'library'
+                  ? ` (al abrir Playnite, ${status.lastCount ?? 0} juegos)`
+                  : ''}
+            .
+          </p>
+          {(status.unmatched?.length ?? 0) > 0 && (
+            <p className="text-xs text-muted">
+              No los encontré en el catálogo por ese nombre: {status.unmatched!.slice(0, 8).join(', ')}
+              {status.unmatched!.length > 8 ? '…' : ''}
+            </p>
+          )}
+          <p className="text-xs text-muted">
+            Para mandar todo ahora: en Playnite, menú Extensiones → GamesTracker → Enviar mis juegos ahora.
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={download} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-surface-2 py-3 text-sm font-semibold disabled:opacity-50">
@@ -65,7 +82,12 @@ export default function PlayniteSettings() {
             <li>Abrí GamesTracker.pext: Playnite pregunta si la instala, decile que sí y reinicialo.</li>
             <li>Listo: al abrir Playnite manda tus juegos, y cada vez que jugás, avisa solo.</li>
           </ol>
-          {status.connected && <p className="mb-2 text-xs text-muted">Todavía no llegó nada de Playnite: instalala y abrí Playnite.</p>}
+          {status.connected && (
+            <p className="mb-2 text-xs text-muted">
+              Todavía no llegó nada de Playnite. Si ya la instalaste, en Playnite andá a Extensiones → GamesTracker → Enviar
+              mis juegos ahora: te muestra si llegó o cuál es el error. Si no aparece ese menú, bajala de nuevo e instalala.
+            </p>
+          )}
           <button
             onClick={download}
             disabled={busy}
