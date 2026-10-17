@@ -74,3 +74,15 @@ jobs:
           # Sin claves de Trakt en el servidor, la conexión con Nuvio aparece como no configurada.
           curl -sf -H "Authorization: Bearer $TOKEN" localhost:8787/api/trakt | grep -q '"enabled":false'
           test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST localhost:8787/api/trakt/connect)" = 503
+      - name: Probar la app con la API detrás de nginx
+        run: |
+          docker compose up -d
+          for i in $(seq 1 20); do curl -sf localhost:3030/api/health && break; sleep 1; done
+          curl -sf localhost:3030/api/health
+          # Al actualizar se recrea la API con otra IP: nginx la tiene que volver a encontrar (antes daba 502).
+          # (un contenedor de relleno se queda con la IP vieja, así la nueva seguro es otra).
+          docker compose rm -sf api
+          docker run -d --rm --network gamestraker_default --name relleno alpine sleep 120
+          docker compose up -d --no-deps api
+          for i in $(seq 1 30); do curl -sf localhost:3030/api/health && break; sleep 1; done
+          curl -sf localhost:3030/api/health
