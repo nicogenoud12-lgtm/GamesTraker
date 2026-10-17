@@ -33,6 +33,26 @@ body {
   overscroll-behavior-y: none;
 }
 
+/*
+ * iPhone: a double tap (say, on the score's + and −) zoomed the page in. `manipulation`
+ * drops the double-tap zoom and keeps pinch-to-zoom.
+ */
+html {
+  touch-action: manipulation;
+}
+
+/*
+ * iPhone: Safari zooms in on any text field under 16px when it's tapped, and stays zoomed.
+ * On touch screens fields are 16px; outside any layer, so this wins over `text-sm`.
+ */
+@media (pointer: coarse) {
+  input:not([type='range']):not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 .pt-safe {
   padding-top: max(env(safe-area-inset-top), 0px);
 }
